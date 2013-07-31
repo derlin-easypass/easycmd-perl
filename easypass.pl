@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+use warnings;
+use strict;
+
 use utf8;
 use Switch;
 
@@ -30,27 +33,29 @@ if ( not defined $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     
     print "\nExisting sessions:\n\n";
     
-    foreach $s (@ls) {
-        print $c++, ' : ', $s;
+    my $i;
+    foreach (@ls) {
+        print $i++, ' : ', $_;
     }
     
+    my $j;
     do{
-        $i = $term->readline("\nsession [0-$c]: ");
-    } while not defined $i or $i !~ /[0-9]+/ or $i > $c;
+        $j = $term->readline("\nsession [0-$i]: ");
+    } while not defined $j or $j !~ /[0-9]+/ or $j > $i;
     
-    chomp( $session = @ls[$i] );
+    chomp( $session = $ls[$j] );
+    
 }else{
     $session .= ".data_ser";
 }
 
 $session = $session_path . $session;
 
-#~ print "\nType your password:";
-#~ ReadMode('noecho'); # don't echo
-#~ my $password = $term->readline();
-#~ ReadMode(0);        # back to normal
-#~ print "\n\n";
-$password = "serieux";
+ReadMode('noecho'); # don't echo
+my $password = $term->readline( "\nType your password:" );
+ReadMode(0);        # back to normal
+print "\n\n";
+#~ my $password = "serieux";
 
 my $datas = DataContainer->new();
 $datas->loadFromFile( $session, $password );
@@ -66,7 +71,7 @@ while ( 1 ){
     # parses the arg
     my $arg = $in[1];
     
-    if( scalar( @last ) > 0 and isInRange( $arg, scalar( @last ) ) ){
+    if( defined $arg and scalar( @last ) > 0 and isInRange( $arg, scalar( @last ) ) ){
         $arg = $last[$arg];
     }
 
@@ -75,8 +80,8 @@ while ( 1 ){
         case "list" { 
             if( not defined $arg ){
                 @last = $datas->keys();
+                my $i;
                 foreach ( @last ) { print "  ", $i++, ": $_\n"; } 
-                undef $i;
                 
             }else{
                 $_ = scalar( $datas->findAccounts( $arg ) );
@@ -86,15 +91,15 @@ while ( 1 ){
                 if( scalar( @last ) < 20 ){
                     
                     if( scalar( @last ) > 8 ){
+                        my $i;
                         foreach(@last){  print $i++, "  : ", $_, "\n"; }
-                        undef $i;
                     
                     }else{
                         foreach( @last ){
+                            my $i;
                             print $i++, ": ";
                             $datas->dump( $_ );
                         }
-                        undef $i;
                     }
                     
                 }
@@ -112,8 +117,8 @@ while ( 1 ){
             }else { 
                 @last = $datas->find( $arg ); 
                 print "  --- ", $_, " match", $_ > 1 ? "es" : ""," ---" , "\n\n";
+                my $i;
                 foreach ( @last ) { print "  ", $i++, ": $_\n\n"; } 
-                undef $i;
             }
         }# end find
         
@@ -148,8 +153,8 @@ while ( 1 ){
                        if( scalar( @_ ) > 1 ){
                             @last = @_;
                             print "  --- Multiple accounts match --- \n";
+                            my $i;
                             foreach(@last){  print "  ", $i++, "  : ", $_, "\n"; }
-                            undef $i;
                             undef $account;
                        }else{
                             $account = $_[0];
@@ -182,39 +187,6 @@ while ( 1 ){
 }# end while
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-exit;
-
-my %accounts = %{ &encrypted_to_hash( $session, $password ) };
-
-&dumpAll( \%accounts );
-
-%found = %{ findAccount( \%accounts, "essai" ) };
-
-print Dump (\%found);
-dumpAll( \%found );
 exit;
 
 
@@ -230,88 +202,6 @@ sub parseInt{
     return $n  =~ /^[0-9]+$/ ? int( $n ) : -1;
 }
 
-sub findAccount{
-    %arg = %{ $_[0] };
-    foreach $key (keys( %arg )){
-        %{ $target{$key} } = %{ $arg{$key} } unless $key !~ /$_[1]/;
-    }
-    return \%target;
-}
-
-
-=item dumbAll()
- prints the content of a 2-dimensional hash in a pretty format
- 
- parameter:
- I<\%hash> a pointer to the hash
-=cut
-sub dumpAll{
-    %hash = %{ shift() };
-    foreach $i ( keys %hash ){
-        print " $i \n";
-        print "-" x ( 2 + length($i) ), "\n";
-        
-        foreach $j ( keys %{ $hash{$i} } ){
-            print "  $j", " " x ( 10 - length($j) ) , "=>  $hash{ $i }{ $j }\n\n";
-        }
-    }
-}
-
-
-=item encrypted_to_hash()
- This function decrypt a json (.data_ser) file, parses it and returns a 2-dimensional
- hash containing the accounts + the details.
- 
- parameters:
- I<sessionpath>
- I<password>
-=cut
-sub encrypted_to_hash{
-    
-    my $sessionpath = shift();
-    my $pass = shift();
-    my $decrypt = `openssl enc -d -aes-128-cbc -a -in $sessionpath -k $pass 2>&1`;
-    print "exit status : $? \n";
-    
-    #print $decrypt;
-    my $json = new JSON;
-
-    # these are some nice json options to relax restrictions a bit:
-    my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt );
-    my @keys = ("account", "pseudo", "email", "password", "notes");
-    my %result;
-
-    # constructs the hash
-    foreach my $array ( @{ $json_text } ){
-         my $account = @{ $array }[0];
-         for my $i (1 .. 4){
-             utf8::encode( $result{ $account }{ $keys[$i] } = @{ $array }[$i] );
-         }
-     }
-    
-    return \%result;
-}
 
 
 
-package Session;
-
-sub new{
-
-    my ( $class, $data ) = @_;
-    @keys = sort keys %{ $data };
-    
-    my $self = {
-        "data" => $data,
-        "accounts" => @{ $data->keys() }
-    };
-    
-    bless $self, $class;
-    return $self;        
-}
-
-sub printKeys{
-    print "keys : \n";
-    my $self = shift();
-    foreach ( @{ $self->{ "accounts" } } ){ print "--$_\n"; }
-}

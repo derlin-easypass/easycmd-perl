@@ -2,6 +2,9 @@
 
 package DataContainer;
 
+use warnings;
+use strict;
+
 use utf8;
 use Term::ReadKey;
 use Term::ReadLine;
@@ -26,14 +29,8 @@ sub new{
 =cut
 sub dumpAll{
     my $self = shift;
-    foreach $i ( keys %{ $self->{ hash } } ){
+    foreach my $i ( keys %{ $self->{ hash } } ){
         $self->dump( $i );
-        #~ print " $i \n";
-        #~ print "-" x ( 2 + length($i) ), "\n";
-        #~ 
-        #~ foreach $j ( keys %{ $self->{ hash }{ $i } } ){
-            #~ print "  $j", " " x ( 10 - length($j) ) , "=>  ", $self->{"hash"}{ $i }{ $j }, "\n\n";
-        #~ }
     }
 }
 
@@ -44,13 +41,9 @@ sub dump{
     print "$account \n";
     print "-" x ( 2 + length($account) ), "\n";
     
-    while ( ($key, $val ) = each %{ $self->{ hash }{ $account } } ){
+    while ( ( my $key, my $val ) = each %{ $self->{ hash }{ $account } } ){
         print ("\t", $key, " " x ( 10 - length($key) ) , "=>  ", $val, "\n") unless ($key eq "password");
     }
-    
-    #~ foreach $j ( keys %{ $self->{ hash }{ $key } } ){
-        #~ print "  $j", " " x ( 10 - length($j) ) , "=>  ", $self->{"hash"}{ $key }{ $j }, "\n\n";
-    #~ }
 }
 
 
@@ -59,19 +52,6 @@ sub findAccounts{
     my ( $self, $account ) = @_;
     return grep( /$account/i, $self->keys() );
 }
-
-#~ sub dumpAll{
-    #~ %self = %{ shift() };
-    #~ foreach $i ( keys %self ){
-        #~ print " $i \n";
-        #~ print "-" x ( 2 + length($i) ), "\n";
-        #~ 
-        #~ foreach $j ( keys %{ $self{$i} } ){
-            #~ print "  $j", " " x ( 10 - length($j) ) , "=>  $self{ $i }{ $j }\n\n";
-        #~ }
-    #~ }
-#~ }
-
 
 
 =item loadFromFile()
@@ -104,8 +84,6 @@ sub loadFromFile{
              utf8::encode( $self->{ hash }{ $account }{ $keys[$i] } = @{ $array }[$i] );
          }
      }
-
-    $self->dump("essai");
 }
 
 
@@ -124,14 +102,12 @@ sub find{
     if( not defined $find ){ return $self->keys() };
     
     my @result;
-    while( ($account, $data ) = each %{ $self->{ hash } } ){
+    while( ( my $account, my $data ) = each %{ $self->{ hash } } ){
         
         if( $account =~ /$find/i or grep( /$find/i, values %{ $data } ) > 0 ){
             push @result, $account;
         }
     }
-    
-    #my @result = map {  grep( /$find/, values %{ $self->{ hash } } ) ?  }
     
     return @result;
 }
