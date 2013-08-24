@@ -70,11 +70,12 @@ while ( 1 ){
     
     # parses the arg
     my $arg = $in[1];
+    my $arg2 = $in[2];
     
     if( defined $arg and scalar( @last ) > 0 and isInRange( $arg, scalar( @last ) ) ){
         $arg = $last[$arg];
     }
-
+    
     switch( $in[0] ){
         
         case "list" { 
@@ -124,19 +125,21 @@ while ( 1 ){
         
         
         case "pass" {
-            $arg = $in[1];
             
-            if( scalar( @last ) > 0 and isInRange( $arg, scalar( @last ) ) ){
-
-                my $pass = $datas->getProp( $last[ $arg ], "password" );
-                if( $pass ){
-                    Clipboard->copy( $pass );
-                    
-                }else{
-                    print "The password is empty...\n";
-                } 
-                
+            if( not defined $arg and scalar( @last ) == 1 ){
+                $arg = $last[0];
             }
+            
+            my $pass = $datas->getProp( $arg, "password" );
+            
+            if( $pass ){
+                print "  Password from \"$arg\" copied to clipboard.\n"; 
+                Clipboard->copy( $pass );
+                
+            }else{
+                print "  Could not determine which password to copy...\n";
+            } 
+
         }# end pass
         
         case "copy" {

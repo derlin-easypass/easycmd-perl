@@ -115,6 +115,7 @@ sub find{
 
 sub getProp{
     my ( $self, $account, $prop ) = @_;
+    defined $account or return;
     return $self->{ hash }{ $account }{ $prop };
 }
 
