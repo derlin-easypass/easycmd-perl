@@ -64,8 +64,8 @@ $datas->loadFromFile( $session, $password );
 my @last = $datas->keys();
 
 while ( 1 ){
-
-    my @in = shellwords( $term->readline("\n> ") ); #for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
+    
+    my @in = shellwords( $term->readline( "\n>"  ) ); #for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
     print "\n";
     
     # parses the arg

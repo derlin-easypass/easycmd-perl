@@ -8,6 +8,8 @@ use strict;
 use utf8;
 use Term::ReadKey;
 use Term::ReadLine;
+use Term::ANSIColor;
+
 use Data::Dumper;
 use JSON -support_by_pp;  
 
@@ -38,13 +40,14 @@ sub dump{
     
     my ( $self, $account ) = @_;
     
-    print "$account \n";
-    print "-" x ( 2 + length($account) ), "\n";
+    print color( "bright_blue" ), "$account \n";
+    print "-" x ( 2 + length($account) ), "\n", color( "reset" );
     
     while ( ( my $key, my $val ) = each %{ $self->{ hash }{ $account } } ){
-        print ("\t", $key, " " x ( 10 - length($key) ) , "=>  ", $val, "\n") unless ($key eq "password");
+        print "   ", $key, " " x ( 10 - length($key) ) , "=>  ", $val, "\n" unless ($key eq "password");
     }
 }
+
 
 
 
