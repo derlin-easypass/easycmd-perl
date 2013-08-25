@@ -39,9 +39,9 @@ sub dumpAll{
 sub dump{
     
     my ( $self, $account ) = @_;
-    
-    print color( "bright_blue" ), "$account \n";
-    print "-" x ( 2 + length($account) ), "\n", color( "reset" );
+    return unless defined $account; 
+    print color( "bright_blue" ), "*** $account ***", color( "reset" ), "\n";
+    #print "-" x ( 2 + length($account) ), "\n", color( "reset" );
     
     while ( ( my $key, my $val ) = each %{ $self->{ hash }{ $account } } ){
         print "   ", $key, " " x ( 10 - length($key) ) , "=>  ", $val, "\n" unless ($key eq "password");
@@ -53,7 +53,7 @@ sub dump{
 
 sub findAccounts{
     my ( $self, $account ) = @_;
-    return grep( /$account/i, $self->keys() );
+    return defined $account ? grep( /$account/i, $self->keys() ) : undef;
 }
 
 

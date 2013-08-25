@@ -4,7 +4,6 @@ use warnings;
 use strict;
 
 use utf8;
-use Switch;
 
 use Term::ReadKey;
 use Term::ReadLine;
@@ -14,14 +13,22 @@ use JSON -support_by_pp;
 use Text::ParseWords;
 
 use Clipboard;
+use File::Spec::Functions;
 use DataContainer;
+use Getopt::Std;
 
+# gets the commandline options 
+my %opts;
+getopts('p:s:', \%opts );
+my $session_path = ( defined $opts{p} and -r $opts{p} ) ? 
+        $opts{p} : "/home/lucy/Dropbox/projets/easypass/sessions/";
+        
+my $session = ( defined $opts{s} ) ? $opts{ s } : undef;
+my @ls = Utils::listSessionDir( $session_path ); # list of the sessions
 
-my $session_path = "/home/lucy/Dropbox/projets/easypass/sessions/";
-my $session = $ARGV[0];
-my @ls = Utils::listSessionDir( $session_path ); 
-
+# setups the terminal 
 my $term = Term::ReadLine->new("easypass");
+my $OUT = $term->OUT;
 
 # patch for clipboard copy under linux
 if ('Clipboard::Xclip' eq $Clipboard::driver) {
@@ -31,28 +38,34 @@ if ('Clipboard::Xclip' eq $Clipboard::driver) {
   };
 }
 
-
+# if the session is not defined, asks it 
 if ( not defined $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     
+    # lists the existing sessions
     print "\nExisting sessions:\n\n";
     my $i = 0;
     foreach (@ls) {
-        print $i++, ' : ', $_, "\n";
+        print "  ", color( "green" ), $i++, color( "reset" ),  ' : ', $_, "\n";
     }
     $i--;
     
-    my $j;
+    # asks the user for the session number to open
+    my $in_session_nbr;
     do{
-        $j = $term->readline("\nsession [0-$i]: ");
-    } while not defined $j or $j !~ /[0-9]+/ or $j > $i;
+        $in_session_nbr = $term->readline( color( "reset" ) . "\nsession [0-$i]: " . color( "yellow" ) );
+    } while not defined $in_session_nbr or $in_session_nbr !~ /[0-9]+/ or $in_session_nbr > $i;
     
-    chomp( $session = $ls[$j] );
+    chomp( $session = $ls[$in_session_nbr] );
     
 }else{
-    $session .= ".data_ser";
+    # adds the extension to the session passed as a param, if not already here
+    $session .= ".data_ser" unless $session =~ /\.data_ser$/; 
 }
 
-$session = $session_path . $session;
+# concatenates the session + path
+$session = File::Spec->catfile( $session_path, $session );
+
+# gets the password from the user
 
 #~ ReadMode('noecho'); # don't echo
 #~ my $password = $term->readline( "\nType your password: " );
@@ -60,34 +73,47 @@ $session = $session_path . $session;
 #~ print "\n\n";
 my $password = "serieux";
 
+# loads the data
 my $datas = DataContainer->new();
 $datas->loadFromFile( $session, $password );
 
-
+# inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->keys();
 
+
+# the actual loop
 while ( 1 ){
 
-    my @in = shellwords( $term->readline("\n> " . color('yellow') ) ); #for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
-    print color("reset"), "\n";
+    # for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
+    print $OUT color( "yellow" );
+    my @in = shellwords( $term->readline( "\n> ") ); 
+    print $OUT color("reset"), "\n";
+    # my $color = color("yellow");
+    # my @test = map { s#\Q$color\E##i } @in;
+    # $term->addhistory( join( " ", @test ) );
+    # next;
     
-    # parses the arg
+    # parses the args from the commandline
     my( $fun, @args ) = @in;
-    
-    #~ if( scalar( @last ) > 0 and Utils::isInRange( $args[0], scalar( @last ) ) ){
-        #~ $args[0] = $last[$args[0]];
-    #~ }
-    
-    #$args[0] = Utils::resolveAccount( $args[0] );
 
+    # dispatch: takes the first arg and tries to call the function with the same name,
+    # prints the help if it is not found
     my $result = Utils::dispatch( $fun, \@args );
     
-    if( $result ){
+    if( $result ){ # if the function returned 1, it means that last was changed => prints it
         $_ = scalar( @last );
+        # number of matches
         print "  --- ", $_, " match", $_ > 1 ? "es" : ""," ---" , "\n\n";
         
+        if( $_ == 1 ){ # if only one match, prints the details
+            print color( "green" ), " 0 : ", color( "reset" );
+            $datas->dump( $last[0] );
+            next;
+        }
+        
+        # else, prints a list of account names with number
         my $i;
-        foreach( @last ){
+        foreach ( @last ){
             print color("green"), "  ", sprintf( "%-3d", $i++ ), color("reset");
             print " : $_\n";
         }
@@ -111,15 +137,17 @@ sub dispatch{
 sub resolveAccount{
     
     my $arg = shift;
-    return unless defined $arg;
     
     # if this is a number from the @last list
     if( scalar( @last ) > 0 and isInRange( $arg, scalar( @last ) ) ){
         return $last[$arg];
         
-    }else{
+    }elsif( scalar( @last ) == 1 ){
+        return $last[0];
+        
+    }elsif( defined $arg ){
         # tries to find accounts that match
-        @_ = $datas->findAccounts( $account );
+        @_ = $datas->findAccounts( $arg );
         if( scalar( @_ ) == 1 ){ # if there is a unique match
             return $_[0];
         }
@@ -173,9 +201,10 @@ sub list{
         @last = $datas->keys();
 
     }else{
-        @last = $datas->findAccounts( $arg );
+        @last = ( Utils::resolveAccount( $arg ) ) and defined $_ or $datas->findAccounts( $arg );
+        
     }
-    
+
     return 1;
 }
 
@@ -184,9 +213,15 @@ sub find{
     my ( $package, $args ) = @_;
     
     if( scalar( @$args ) == 1 ){ # just grep in all fields
-        # TODO
-        Utils::printError( "usage : find <property> <operator> <keyword>" );
-        return 0;
+        @_ = $datas->find( $args->[0] );
+        if( $_ > 0 ){
+            @last = @_;
+            return 1;
+        }else{
+            Utils::printError( "0 match" );
+            return 0;
+        } 
+        
         
     }elsif( scalar( @$args ) == 3 ){
         my ($header, $operator, $keyword ) = @$args;
@@ -199,7 +234,6 @@ sub find{
             Utils::printError( "allowed operators : like, ~, is, =" );
             return;
         }
-        
         
         my @matches;
         
@@ -242,26 +276,15 @@ sub find{
 
 sub details{
     my ($package, $args) = @_;
-    my $arg = $args->[0];
+    my $account = Utils::resolveAccount( $args->[0] );
     
-    if( defined $arg ){
+    if( defined $account ){
         
-        my @matches = $datas->findAccounts( $arg );
-        $_ = scalar( @matches );
-        
-        if( $_ == 0 ){
-            Utils::printError( "0 match" );
-            
-        }elsif( $_ == 1 ){
-           $datas->dump( @matches ); 
-        
-        }else{
-            @last = @matches;
-            return 1;
-        }
+        $datas->dump( $account );
+        return 0;
         
     }else{
-        Utils::printError( "no argument provided" );
+        Utils::printError( defined $args->[0] ? "0 match"  : "no argument provided" );
         return 0;
     }
 }
@@ -302,24 +325,9 @@ sub copy{
     }
     
     if( not defined $account ){
+        Utils::printError("ambiguous account : could not copy");
+        return 0;
         
-        if( scalar( @last ) == 1 ){
-            $account = $last[0];
-            
-        }else{
-            Utils::printError("ambiguous account : could not copy");
-            return 0;
-        }
-        
-    }elsif( not exists $datas->{ hash }{ $account } ){
-    
-        @_ = $datas->findAccounts( $account );
-        if( scalar( @_ ) == 1 ){
-            $account = $_[0];
-        }else{
-           Utils::printError("ambiguous account : could not copy");
-           return 0;
-        }
     }
         
     $_ = $datas->getProp( $account, $prop );
