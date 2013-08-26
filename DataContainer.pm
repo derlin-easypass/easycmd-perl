@@ -124,12 +124,12 @@ sub new{
 }
 
 
-#~ sub dumpAll{
-    #~ my $self = shift;
-    #~ foreach my $i ( keys %{ $self->{ hash } } ){
-        #~ $self->to_string( $i );
-    #~ }
-#~ }
+sub dump_all{
+    my $self = shift;
+    foreach my $i ( keys %{ $self->{ hash } } ){
+        print $self->to_string( $i );
+    }
+}
 
 
 
@@ -170,6 +170,7 @@ sub load_from_file{
 
     # these are some nice json options to relax restrictions a bit:
     my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt );
+    print Dumper($json_text);
     my @keys = @{ $self->{ headers } };
     unshift( @keys, "account" );
     
@@ -182,6 +183,26 @@ sub load_from_file{
      }
 }
 
+sub save_to_file{
+    my ( $self, $sessionpath, $pass ) = @_ ;
+    my $json = new JSON;
+
+    my @encrypt;
+    
+    foreach my $account ( keys %{ $self->{hash} } ){
+        my @entry = ( $account );
+        foreach my $field ( @{ $self->{headers} } ){
+            push @entry, $self->get_prop( $account, $field );
+        }
+        push @encrypt, \@entry;
+    }
+    
+    print Dumper( \@encrypt );
+    
+    # these are some nice json options to relax restrictions a bit:
+    my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
+    print $json_text;
+}
 
 sub to_string{
     

@@ -82,12 +82,13 @@ $session = File::Spec->catfile( $session_path, $session );
 #~ my $password = $term->readline( "\nType your password: " );
 #~ ReadMode(0);        # back to normal
 #~ print "\n\n";
-my $password = "serieux";
+my $password = "essai";
 
 # loads the data
 my $datas = DataContainer->new();
 $datas->load_from_file( $session, $password );
-
+$datas->save_to_file( $session, "sdf" );
+exit;
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->accounts();
 
