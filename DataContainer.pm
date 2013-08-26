@@ -164,9 +164,8 @@ sub load_from_file{
     my ( $self, $sessionpath, $pass ) = @_ ;
     my $decrypt = `openssl enc -d -aes-128-cbc -a -in $sessionpath -k $pass 2>&1`;
     
-    die("Error, credentials or session path incorrect. Could not decrypt file.\n") unless $? == 0;
+    die( "Error, credentials or session path incorrect. Could not decrypt file.\n" ) unless $? == 0;
     
-    #print $decrypt;
     my $json = new JSON;
 
     # these are some nice json options to relax restrictions a bit:
@@ -176,9 +175,9 @@ sub load_from_file{
     
     # constructs the hash
     foreach my $array ( @{ $json_text } ){
-         my $account = @{ $array }[0];
-         for my $i (1 .. 4){
-             utf8::encode( $self->{ hash }{ $account }{ $keys[$i] } = @{ $array }[$i] );
+         my $account = $array->[0] =~ s/^\s+|\s+$//rg; # trims the account name
+         for (1 .. 4){
+             utf8::encode( $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_] );
          }
      }
 }
