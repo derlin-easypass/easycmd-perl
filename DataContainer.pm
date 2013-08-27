@@ -120,7 +120,6 @@ sub new{
     };
     bless $self, $class;
     return $self;
-
 }
 
 
@@ -130,9 +129,6 @@ sub dump_all{
         print $self->to_string( $i );
     }
 }
-
-
-
 
 
 
@@ -165,8 +161,6 @@ sub load_from_file{
     my $decrypt = `openssl enc -d -aes-128-cbc -a -in $sessionpath -k $pass 2>&1`;
     die( "Error, credentials or session path incorrect. Could not decrypt file.\n" ) unless $? == 0;
     
-    utf8::encode( $decrypt );
-    
 
     # these are some nice json options to relax restrictions a bit:
     my $json = new JSON;
@@ -180,8 +174,10 @@ sub load_from_file{
     # constructs the hash
     foreach my $array ( @{ $json_text } ){
          my $account = $array->[0] =~ s/^\s+|\s+$//rg; # trims the account name
+         utf8::encode( $account );
          for (1 .. 4){
-              $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_];
+              #$self->{ hash }{ $account }{ $keys[$_] } = $array->[$_];
+              utf8::encode( $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_] );
          }
      }
 }
@@ -195,9 +191,9 @@ sub save_to_file{
     # reconstructs the ArrayList<Object[5]> java structure
     foreach my $account ( keys %{ $self->{hash} } ){
         my @entry = ( $account );
+        utf8::decode( @entry ); # in scalar context, the array returns its last element
         foreach my $field ( @{ $self->{headers} } ){
-            #utf8::decode( $_ = $self->get_prop( $account, $field ) );
-            $_ = $self->get_prop( $account, $field );
+            utf8::decode( $_ = $self->get_prop( $account, $field ) );
             push @entry, $_;
         }
         push @encrypt, \@entry;
@@ -216,8 +212,7 @@ sub save_to_file{
     open my $FILE, ">$sessionpath";
     print $FILE $encrypt;
     close $FILE;
-    
-    print "data serialized\n";
+
     return 1;
     
 }

@@ -20,7 +20,7 @@ use Getopt::Long;
 $main::VERSION = 1.0;
 
 # default 
-my $session = '';
+my $session = "";
 my $session_path = "/home/lucy/Dropbox/projets/easypass/sessions/";
 
 # gets the command line arguments
@@ -32,8 +32,8 @@ GetOptions(
 my @ls = Utils::list_session_dir( $session_path ); # list of the sessions
 
 # setups the terminal 
-my $term = Term::ReadLine->new("easypass");
-my $OUT = $term->OUT;
+our $term = Term::ReadLine->new("easypass");
+our $OUT = $term->OUT;
 
 # patch for clipboard copy under linux
 if ('Clipboard::Xclip' eq $Clipboard::driver ) {
@@ -85,10 +85,12 @@ $session = File::Spec->catfile( $session_path, $session );
 my $password = "essai";
 
 # loads the data
-my $datas = DataContainer->new();
+our $datas = DataContainer->new();
+$datas->load_from_file( "/home/lucy/Dropbox/projets/easypass/sessions/essai.data_ser", $password );
+$session = "./encrypt.data_ser";
+$datas->save_to_file( $session, $password );
+$datas = DataContainer->new();
 $datas->load_from_file( $session, $password );
-$datas->save_to_file( $session, "essai" );
-$datas->load_from_file( "./encrypt.data_ser", "essai" );
 #exit;
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->accounts();
@@ -138,6 +140,8 @@ while ( 1 ){
 package Utils;
 
 use Term::ANSIColor;
+use Term::ReadKey;
+use Term::ReadLine;
 
 # tries to call the subroutine named after the first argument, passing to it
 # the rest of the args. If the subroutine does not exist, calls the help command.
@@ -186,14 +190,14 @@ sub is_in_range{
     my ( $n, $max_range ) = @_;
     return unless defined $n and defined $max_range;
     $n = parse_int( $n );
-    return ( $n >= 0 and $n < $max_range );
+    return $n == -1 ? 0 : ( $n >= 0 and $n < $max_range );
 }
 
 # parses a string and returns its integer counterpart, or -1 if it is not a number
 # @params : the string to parse
 sub parse_int{
     my $n = shift;
-    return defined $n and $n  =~ /^[0-9]+$/ ? int( $n ) : -1;
+    return $n  =~ /^[0-9]+$/ ? int( $n ) : -1;
 }
 
 # simple trim function
@@ -207,6 +211,16 @@ sub distinct{
     # unique, and then get the keys back
     my %h;
     return grep { !$h{$_}++ } @_
+}
+
+sub get_pass{
+    my $msg = shift;
+    $msg = "Type your password : " unless defined $msg;
+    ReadMode('noecho'); # don't echo
+    my $password = $term->readline( $msg );
+    ReadMode( 0 );        # back to normal
+    print "\n";
+    return $password;
 }
 
 # returns an array containing the names of the files with the .data_ser extension
@@ -249,6 +263,7 @@ package Commands;
 
 use Data::Dumper;
 use Term::ANSIColor;
+
 
 # list the accounts 
 # if no arguments, lists all the accounts names and stores them in last
@@ -433,6 +448,76 @@ sub copy{
     }else{
         Utils::print_info("empty property : did not copy");
     }
+    
+    return 0;
+}
+
+sub add{
+    my ( $package, $args ) = @_;
+    
+    my %new_values;
+    my $account = $term->readline( "\n  new account name : " );
+    $account = Utils::trim( $account );
+    print_error( "this account already exist. Use the edit command instead" ) and return 
+        unless not $account ~~ [ $datas->accounts() ];
+        
+    foreach my $prop ( $datas->headers() ){
+        if( $prop eq 'password' ){
+            $new_values{ $prop } = Utils::get_pass( "  $prop : " );
+        }else{
+            $new_values{ $prop } = $term->readline( "  $prop : " );
+        }
+    }
+    
+    my $confirm;
+    
+    while( 1 ){
+        $confirm = $term->readline( "\nsaving ? [y/n] " );
+        if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
+           last;
+        }
+    }
+    
+    if( $confirm =~ /y/i ){
+        $datas->{ hash }{ $account } = \%new_values;
+        $datas->save_to_file( $session, $password );
+        Utils::print_info("New entry saved");
+    } 
+    
+    return 0;
+}
+
+sub edit{
+    my ( $package, $args ) = @_;
+    my $account = Utils::resolve_account( $args->[0] );
+    Utils::print_error("No account provided") and return unless defined $account;
+    my %new_values;
+    my $new_account = Utils::trim( $term->readline( "\n  account name : ", $account ) );
+    foreach my $prop ( $datas->headers() ){
+        if( $prop eq 'password' ){
+            $_ = Utils::get_pass( "  $prop : " );
+            $new_values{ $prop } = $_ if Utils::trim( $_ );
+        }else{
+            $new_values{ $prop } = $term->readline( "  $prop : ", $datas->get_prop( $account, $prop ) );
+        }
+    }
+    
+    my $confirm;
+    
+    while( 1 ){
+        $confirm = $term->readline( "\n  Saving ? [y/n] " );
+        if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
+           last;
+        }
+    }
+    
+    if( $confirm =~ /y/i ){
+        delete $datas->{ hash }{ $account } unless $account eq $new_account;
+        $datas->{ hash }{ $new_account } = \%new_values;
+        $datas->save_to_file( $session, $password );
+        print "\n";
+        Utils::print_info("New entry saved");
+    } 
     
     return 0;
 }
