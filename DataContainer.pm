@@ -163,22 +163,25 @@ sub load_from_file{
     
     my ( $self, $sessionpath, $pass ) = @_ ;
     my $decrypt = `openssl enc -d -aes-128-cbc -a -in $sessionpath -k $pass 2>&1`;
-    
     die( "Error, credentials or session path incorrect. Could not decrypt file.\n" ) unless $? == 0;
     
-    my $json = new JSON;
+    utf8::encode( $decrypt );
+    
 
     # these are some nice json options to relax restrictions a bit:
+    my $json = new JSON;
+    
     my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt );
-    print Dumper($json_text);
+
     my @keys = @{ $self->{ headers } };
     unshift( @keys, "account" );
+    
     
     # constructs the hash
     foreach my $array ( @{ $json_text } ){
          my $account = $array->[0] =~ s/^\s+|\s+$//rg; # trims the account name
          for (1 .. 4){
-             utf8::encode( $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_] );
+              $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_];
          }
      }
 }
@@ -189,19 +192,34 @@ sub save_to_file{
 
     my @encrypt;
     
+    # reconstructs the ArrayList<Object[5]> java structure
     foreach my $account ( keys %{ $self->{hash} } ){
         my @entry = ( $account );
         foreach my $field ( @{ $self->{headers} } ){
-            push @entry, $self->get_prop( $account, $field );
+            #utf8::decode( $_ = $self->get_prop( $account, $field ) );
+            $_ = $self->get_prop( $account, $field );
+            push @entry, $_;
         }
         push @encrypt, \@entry;
     }
     
-    print Dumper( \@encrypt );
+    # converts to json
+    #my $json_text = $json->new->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
+    my $json_text = $json->encode( \@encrypt );
+    utf8::decode( $json_text =~ s/\"/\\\"/g ); # decodes in utf8 and escapes the double quotes since we use echo "..." for openssl command
     
-    # these are some nice json options to relax restrictions a bit:
-    my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
-    print $json_text;
+    # encrypts the json
+    my $encrypt = `echo "$json_text" | openssl enc -aes-128-cbc -a -k $pass 2>&1`;
+    return unless $? == 0;
+    
+    # prints the encrypted result to file
+    open my $FILE, ">$sessionpath";
+    print $FILE $encrypt;
+    close $FILE;
+    
+    print "data serialized\n";
+    return 1;
+    
 }
 
 sub to_string{

@@ -87,8 +87,9 @@ my $password = "essai";
 # loads the data
 my $datas = DataContainer->new();
 $datas->load_from_file( $session, $password );
-$datas->save_to_file( $session, "sdf" );
-exit;
+$datas->save_to_file( $session, "essai" );
+$datas->load_from_file( "./encrypt.data_ser", "essai" );
+#exit;
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->accounts();
 
