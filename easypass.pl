@@ -23,17 +23,21 @@ $main::VERSION = 1.0;
 my $session = "";
 my $session_path = "/home/lucy/Dropbox/projets/easypass/sessions/";
 
+our $datas;
+our ( $term, $OUT );
+
+# setups the terminal 
+$term = Term::ReadLine->new("easypass");
+$OUT = $term->OUT;
+
 # gets the command line arguments
 GetOptions( 
     "s|session=s" => \$session,
     "p|path=s" => \$session_path
 );
 
-my @ls = Utils::list_session_dir( $session_path ); # list of the sessions
+my @ls = Utils::list_session_dir( $session_path ); # list of the sessions names
 
-# setups the terminal 
-our $term = Term::ReadLine->new("easypass");
-our $OUT = $term->OUT;
 
 # patch for clipboard copy under linux
 if ('Clipboard::Xclip' eq $Clipboard::driver ) {
@@ -45,6 +49,8 @@ if ('Clipboard::Xclip' eq $Clipboard::driver ) {
 
 # ***************************************************** init 
 
+my $new_session = ''; # false
+
 # if the session is not defined, asks it 
 if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     
@@ -54,7 +60,7 @@ if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     foreach (@ls) {
         print "  ", color( "green" ), $i++, color( "reset" ),  ' : ', $_, "\n";
     }
-    $i--;
+    print "  ", color( "magenta" ), $i, color( "reset" ),  ' : new...', "\n";
     
     # asks the user for the session number to open
     my $in_session_nbr;
@@ -65,8 +71,18 @@ if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
         
     }while Utils::parse_int( $in_session_nbr ) == -1 or $in_session_nbr > $i;
     
-    # strips the line break
-    chomp( $session = $ls[$in_session_nbr] );
+    if( $in_session_nbr == $i ){ # new session
+        $new_session = 1;
+        # gets the new session name
+        do{
+            $session = $term->readline( "new session name: " );
+        }while( $session !~ /^[a-z0-9_-]+$/ );
+        # adds the proper extension
+        $session .= ".data_ser";
+    }else{
+        # strips the line break
+        chomp( $session = $ls[$in_session_nbr] );
+    }
     
 }else{
     # adds the extension to the session passed as a param, if not already here
@@ -85,12 +101,9 @@ $session = File::Spec->catfile( $session_path, $session );
 my $password = "essai";
 
 # loads the data
-our $datas = DataContainer->new();
-$datas->load_from_file( "/home/lucy/Dropbox/projets/easypass/sessions/essai.data_ser", $password );
-$session = "./encrypt.data_ser";
-$datas->save_to_file( $session, $password );
 $datas = DataContainer->new();
-$datas->load_from_file( $session, $password );
+$datas->load_from_file( $session, $password ) unless $new_session;
+
 #exit;
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->accounts();
@@ -263,6 +276,7 @@ package Commands;
 
 use Data::Dumper;
 use Term::ANSIColor;
+use Term::ReadLine;
 
 
 # list the accounts 
@@ -462,7 +476,7 @@ sub add{
     print_error( "this account already exist. Use the edit command instead" ) and return 
         unless not $account ~~ [ $datas->accounts() ];
         
-    foreach my $prop ( $datas->headers() ){
+    foreach my $prop ( @{ $datas->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             $new_values{ $prop } = Utils::get_pass( "  $prop : " );
         }else{
@@ -470,22 +484,21 @@ sub add{
         }
     }
     
-    my $confirm;
-    
+
     while( 1 ){
-        $confirm = $term->readline( "\nsaving ? [y/n] " );
+        my $confirm = $term->readline( "\nsaving ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
-           last;
+            if( $confirm =~ /y/i ){
+                $datas->add( $account, \%new_values );
+                $datas->save_to_file( $session, $password );
+                print $OUT "\n";
+                Utils::print_info("New entry saved");
+            } 
+            
+           return 0;
         }
     }
-    
-    if( $confirm =~ /y/i ){
-        $datas->{ hash }{ $account } = \%new_values;
-        $datas->save_to_file( $session, $password );
-        Utils::print_info("New entry saved");
-    } 
-    
-    return 0;
+
 }
 
 # edits an account
@@ -496,9 +509,11 @@ sub edit{
     my ( $package, $args ) = @_;
     my $account = Utils::resolve_account( $args->[0] );
     Utils::print_error("No account provided") and return unless defined $account;
+    
     my %new_values;
     my $new_account = Utils::trim( $term->readline( "\n  account name : ", $account ) );
-    foreach my $prop ( $datas->headers() ){
+    
+    foreach my $prop ( @{ $datas->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             $_ = Utils::get_pass( "  $prop : " );
             $new_values{ $prop } = $_ if Utils::trim( $_ );
@@ -517,8 +532,9 @@ sub edit{
     }
     
     if( $confirm =~ /y/i ){
-        delete $datas->{ hash }{ $account } unless $account eq $new_account;
-        $datas->{ hash }{ $new_account } = \%new_values;
+        # if the account name was changed, deletes the old key
+        $datas->delete( $account ) unless $account eq $new_account;
+        $datas->add( $new_account, \%new_values );
         $datas->save_to_file( $session, $password );
         print "\n";
         Utils::print_info("New entry saved");
@@ -527,8 +543,25 @@ sub edit{
     return 0;
 }
 
+sub delete{
+    my ( $package, $args ) = @_;
+    my $account = Utils::resolve_account( $args->[0] );
+    Utils::print_error("No account provided") and return unless defined $account;
+    
+    while( 1 ){
+        my $confirm = $term->readline( "\n  Deleting \"$account\" ? [y/n] " );
+        if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
+           if( $confirm =~ /y/i ){
+                print "calling delete ";
+                $datas->delete( $account );
+           }
+           return 0;
+        }
+    }
+    
+}
 
 sub help{
-    print " Possible commands : find, copy, list, pass\n";
+    print $OUT " Possible commands : find, copy, list, pass\n";
     return 0;
 }

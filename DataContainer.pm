@@ -41,7 +41,14 @@ Returns a new empty container. Only the headers are available.
 
 Used to load datas from a file into the object (initialisation).
 
-I<params> : full session path, password
+I<params> : full session path (i.e. the file to load from), password
+
+=item C<save_to_file>
+
+The data contained in this object are saved to a file.
+The saving is easypass compatible, i.e. json encoded and aes-cbc-128 encrypted (openssl compatible) 
+
+I<params> : full session path (i.e. the file to save to), password
 
 
 =item C<match_account_name>
@@ -85,6 +92,21 @@ Returns a string containing the details of a specific account,
 or nothing if the account is not defined.     
 
 I<params> : full account name
+
+
+=item C<add>
+
+Adds a new item (the changes are not serialized, you need to call save_to_file to make it permanent).
+  
+I<params> :  the new account name, a pointer to a hash containing the new values (pseudo, email, password, notes)
+
+
+=item C<delete>
+
+Removes and entry from the session and saves the file.  
+  
+I<params> :  the account name, to be deleted
+
 
 =back
 
@@ -244,6 +266,20 @@ sub get_prop{
     my ( $self, $account, $prop ) = @_;
     defined $account or return;
     return $self->{ hash }{ $account }{ $prop };
+}
+
+
+sub delete{
+    my ( $self, $account ) = @_;
+    defined $account or return;
+    delete $self->{ hash }{ $account };    
+}
+
+
+sub add{
+    my ( $self, $account, $values ) = @_;
+    defined $account or return;
+    $self->{ hash }{ $account } = $values;    
 }
 
 1;
