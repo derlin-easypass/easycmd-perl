@@ -452,6 +452,7 @@ sub copy{
     return 0;
 }
 
+# adds a account
 sub add{
     my ( $package, $args ) = @_;
     
@@ -487,6 +488,10 @@ sub add{
     return 0;
 }
 
+# edits an account
+sub modify{
+    edit( @_ );
+}
 sub edit{
     my ( $package, $args ) = @_;
     my $account = Utils::resolve_account( $args->[0] );
