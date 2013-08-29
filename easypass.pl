@@ -112,7 +112,7 @@ if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     # asks the user for the session number to open
     my $in_session_nbr;
     do{
-        my $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
+        $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
         exit if $in_session_nbr eq "exit";
         
@@ -141,11 +141,11 @@ $session = File::Spec->catfile( $session_path, $session );
 
 # gets the password from the user
 
-#~ ReadMode('noecho'); # don't echo
-#~ my $password = $term->readline( "\nType your password: " );
-#~ ReadMode(0);        # back to normal
-#~ print "\n\n";
-my $password = "essai";
+ReadMode('noecho'); # don't echo
+my $password = $term->readline( "\nType your password: " );
+ReadMode(0);        # back to normal
+print "\n";
+#my $password = "essai";
 
 # loads the data
 $datas = DataContainer->new();
@@ -582,9 +582,9 @@ sub modify{ # ( $account )
     edit( @_ );
 }
 # edits an account
+sub edit{  # ( $account )
 #
 # I<params>: the account name
-sub edit{  # ( $account )
     my ( $package, $args ) = @_;
     my $account = Utils::resolve_account( $args->[0] );
     Utils::print_error("No account provided") and return unless defined $account;
