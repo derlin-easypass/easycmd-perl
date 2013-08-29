@@ -1,0 +1,265 @@
+=head1 NAME
+
+Easypass::CommandLine
+
+
+=head1 DESCRIPTION
+
+!/usr/bin/env perl
+This program offers a simple way to manipulate easypass session files from the command line.
+You can search for accounts, copy properties to clipboard, edit|delete|add accounts.
+Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser extension.
+
+
+=head1 REQUIRES
+
+L<Term::ReadLine> 
+
+L<Term::ANSIColor> 
+
+L<Data::Dumper> 
+
+L<Term::ReadLine> 
+
+L<Term::ReadKey> 
+
+L<Term::ANSIColor> 
+
+L<Cwd> 
+
+L<Getopt::Long> 
+
+L<DataContainer> 
+
+L<File::Spec::Functions> 
+
+L<Clipboard> 
+
+L<Text::ParseWords> 
+
+L<JSON> 
+
+L<Data::Dumper> 
+
+L<Term::ANSIColor> 
+
+L<Term::ReadLine> 
+
+L<Term::ReadKey> 
+
+L<utf8> 
+
+
+=head1 METHODS
+
+=head2 add
+
+ add();
+
+adds a new account
+
+
+=head2 copy
+
+ copy($account);
+
+copy <property> <account name>
+   Copies some property of an account to the clipboard.
+
+# I<params>: the account name
+
+
+=head2 delete
+
+ delete($account);
+
+deletes an account
+
+
+=head2 details
+
+ details($account);
+
+prints the details of the account
+
+
+=head2 dispatch
+
+ dispatch(\@args);
+
+tries to call the subroutine named after the first argument, passing to it
+the args. If the subroutine does not exist, calls the help command.
+note : the subroutines are the one in the command package.
+
+
+=head2 distinct
+
+ my \@arrayref = distinct(\@arrayref);
+
+removes the duplicates from the given array
+I<params>: the array
+
+
+=head2 edit
+
+ edit($account);
+
+edits an account
+
+I<params>: the account name
+
+
+=head2 find
+
+ find(\@args);
+
+search method. Stores the matches in the @last variable.
+find <global pattern>
+      stores all the accounts having at least one field containing the
+      pattern.
+
+   find <property> [is|=] <pattern(s)>
+      stores all the accounts whose property matches exactly the
+      pattern(s).
+
+   find <property> [like|~] <pattern(s)>
+      stores all the accounts whose property contains the pattern(s).
+
+   find <property> unlike <pattern(s)>
+      stores all the accounts whose property does not contain the pattern(s).
+
+
+=head2 get_pass
+
+ my $pass = get_pass();
+
+prompts for a password and returns it.
+
+
+=head2 h
+
+ h();
+
+prints the available commands, without details
+
+
+=head2 help
+
+ help();
+
+prints the available commands, with details
+
+
+=head2 is_in_range
+
+ my $bool = is_in_range($int, $max_range);
+
+returns true if the first argument is a positive number and is less than
+the number passed as a second parameter.
+
+I<params>: the potential number, the max (exclusive)
+
+
+=head2 last
+
+ last();
+
+simply returns 1, so tells the main routine to print the content of last
+
+
+=head2 list
+
+ list();
+
+list the accounts
+stores in the last variable all the account names, or only the ones with at least one
+field containing the pattern passed as a parameter.
+
+I<params>: the pattern ( optional )
+
+
+=head2 list_session_dir
+
+ my \@session_files = list_session_dir($path);
+
+returns an array containing the names of the files with the .data_ser extension
+contained in the specified directory
+I<params>: the absolute path to the directory
+
+
+=head2 modify
+
+ modify($account);
+
+edits an account
+
+I<params>: the account name
+
+
+=head2 parse_int
+
+ my $int = parse_int($arg);
+
+parses a string and returns its integer counterpart, or -1 if it is not a number
+
+I<params>: the string to parse
+
+
+=head2 pass
+
+ pass($account);
+
+Copies the password of the account in the clipboard
+
+I<params>: the account name
+
+
+=head2 print_error
+
+ print_error($message);
+
+prints an error message (in red) to stdout
+I<params>: the message to print
+
+
+=head2 print_info
+
+ print_info($message);
+
+prints an info message to stdout
+I<params>: the message to print
+
+
+=head2 resolve_account
+
+ my $account_name = resolve_account($arg);
+
+tries to resolve the account pointed by the argument, returning the account name :
+1. if the arg is a number, finds if it denotes an index of the last array var.
+2. if the arg is undefined and the last var contains only one account, returns it
+3. searches the account names that match the arg, and returns it if only 1 match
+if none of the above, returns undef.
+
+I<params>: the arg to resolve
+
+
+=head2 trim
+
+ my $scalar = trim($scalar);
+
+simple trim function
+I<params>: the string to trim
+
+
+
+=head1 COMMANDLINE OPTIONS
+
+-s|--session 
+     the name of the session to open (filename)
+
+-p|--path 
+     the path of the sessions directory
+
+
+=cut
+

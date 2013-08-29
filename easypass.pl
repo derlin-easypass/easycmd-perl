@@ -1,4 +1,20 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
+# This program offers a simple way to manipulate easypass session files from the command line.
+# You can search for accounts, copy properties to clipboard, edit|delete|add accounts.
+# Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser extension.
+# COMMANDLINE OPTIONS
+# ===================
+# -s|--session 
+#      the name of the session to open (filename)
+#
+# -p|--path 
+#      the path of the sessions directory
+
+$main::VERSION = 1.0;
+
+
+package Easypass::CommandLine;
+
 
 use warnings;
 use strict;
@@ -16,15 +32,15 @@ use Clipboard;
 use File::Spec::Functions;
 use DataContainer;
 use Getopt::Long;
+use Cwd;
 
-$main::VERSION = 1.0;
-
-# default 
-my $session = "";
-my $session_path = "/home/lucy/Dropbox/projets/easypass/sessions/";
-
+# shared variables between packages
 our $datas;
 our ( $term, $OUT );
+
+# default arguments
+my $session = "";
+my $session_path = ""; #"/home/lucy/Dropbox/projets/easypass/sessions/";
 
 # setups the terminal 
 $term = Term::ReadLine->new("easypass");
@@ -32,10 +48,41 @@ $OUT = $term->OUT;
 
 # gets the command line arguments
 GetOptions( 
-    "s|session=s" => \$session,
-    "p|path=s" => \$session_path
+    "s|session=s" => sub{ 
+        # adds the extension if not specified
+        $session = $_[1]; # @_ = opt_name, opt_value
+        $session .= ".data_ser" unless $session =~ /\.data_ser$/; 
+     },
+     
+    "p|path=s" => sub{
+        # checks that the path exists
+        $session_path = $_[1]; # @_ = opt_name, opt_value
+        if( not -d $session_path ){
+            Utils::print_error( "the directory $session_path does not exist" );
+            exit(1);
+        }
+    }
 );
 
+# prompts for the session path
+if( not $session_path ){
+    while( 1 ){
+        $_ = $term->readline( "\nEnter the sessions folder path:" . color("yellow") .  " " );
+        print color("reset");
+        
+        exit if Utils::trim( $_ ) eq "exit";
+        # resolves the ~ as home folder in linux
+        s/(~)/${ENV{HOME}}/g;
+        # tries to get the real path if rel
+        $session_path = Cwd::realpath( $_ ) unless not $_;
+        # break if the dir exist
+        last if ( -d $session_path ); 
+        
+        Utils::print_error( "'$session_path' is not a valid directory" );
+    }
+}
+
+# gets the list of sessions
 my @ls = Utils::list_session_dir( $session_path ); # list of the sessions names
 
 
@@ -54,7 +101,7 @@ my $new_session = ''; # false
 # if the session is not defined, asks it 
 if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     
-    # lists the existing sessions
+    # lists the existing sessions 
     print "\nExisting sessions:\n\n";
     my $i = 0;
     foreach (@ls) {
@@ -65,7 +112,7 @@ if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
     # asks the user for the session number to open
     my $in_session_nbr;
     do{
-        $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
+        my $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
         exit if $in_session_nbr eq "exit";
         
@@ -79,14 +126,14 @@ if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
         }while( $session !~ /^[a-z0-9_-]+$/ );
         # adds the proper extension
         $session .= ".data_ser";
-    }else{
+    }else{ # existing session
         # strips the line break
         chomp( $session = $ls[$in_session_nbr] );
     }
     
-}else{
+}else{ # sessions passed as a parameter
     # adds the extension to the session passed as a param, if not already here
-    $session .= ".data_ser" unless $session =~ /\.data_ser$/; 
+    
 }
 
 # concatenates the session + path
@@ -104,7 +151,7 @@ my $password = "essai";
 $datas = DataContainer->new();
 $datas->load_from_file( $session, $password ) unless $new_session;
 
-#exit;
+
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $datas->accounts();
 
@@ -123,7 +170,7 @@ while ( 1 ){
 
     # dispatch: takes the first arg and tries to call the function with the same name,
     # prints the help if it is not found
-    my $result = Utils::dispatch( $fun, \@args );
+    my $result = dispatch( $fun, \@args );
     
     if( $result ){ # if the function returned 1, it means that last was changed => prints it
         $_ = scalar( @last );
@@ -147,33 +194,39 @@ while ( 1 ){
 }# end while
 
 
+# tries to call the subroutine named after the first argument, passing to it
+# the args. If the subroutine does not exist, calls the help command.
+# note : the subroutines are the one in the command package.
+sub dispatch{ # void ($function_name \@args)
+    no strict 'refs';
+    my ( $fun, $args ) = @_;
+    exit if $fun eq "exit";
+    
+    Utils::print_error( 'unknown command. Try "h" or "help" for help' ) and return 
+        unless Commands->can( $fun );
+        
+    Commands->$fun( $args );
+}
 
 # ****************************************************** utils 
 
 package Utils;
 
+# Provides simple sub utilities.
+
 use Term::ANSIColor;
 use Term::ReadKey;
 use Term::ReadLine;
 
-# tries to call the subroutine named after the first argument, passing to it
-# the rest of the args. If the subroutine does not exist, calls the help command.
-# note : the subroutines are the one in the command package.
-# @params : the subroutine name, a list of args to pass to the sub
-sub dispatch{
-    no strict 'refs';
-    my ( $fun, $args ) = @_;
-    exit if $fun eq "exit";
-    $fun = "help" unless Commands->can( $fun );
-    Commands->$fun( $args );
-}
 
 # tries to resolve the account pointed by the argument, returning the account name :
 # 1. if the arg is a number, finds if it denotes an index of the last array var.
 # 2. if the arg is undefined and the last var contains only one account, returns it
 # 3. searches the account names that match the arg, and returns it if only 1 match
 # if none of the above, returns undef.
-sub resolve_account{
+#
+# I<params>: the arg to resolve
+sub resolve_account{ # $account_name ($arg)
     
     my $arg = shift;
     
@@ -198,8 +251,9 @@ sub resolve_account{
 
 # returns true if the first argument is a positive number and is less than
 # the number passed as a second parameter.
-# @params : the potential number, the max (exclusive) 
-sub is_in_range{
+#
+# I<params>: the potential number, the max (exclusive) 
+sub is_in_range{ # $bool ( $int, $max_range )
     my ( $n, $max_range ) = @_;
     return unless defined $n and defined $max_range;
     $n = parse_int( $n );
@@ -207,26 +261,30 @@ sub is_in_range{
 }
 
 # parses a string and returns its integer counterpart, or -1 if it is not a number
-# @params : the string to parse
-sub parse_int{
+#
+# I<params>: the string to parse
+sub parse_int{ # $int ( $arg )
     my $n = shift;
     return $n  =~ /^[0-9]+$/ ? int( $n ) : -1;
 }
 
 # simple trim function
-sub trim {
+# I<params>: the string to trim 
+sub trim { # $ ($)
    return $_[0] =~ s/^\s+|\s+$//rg;
 }
 
 # removes the duplicates from the given array
-sub distinct{
+# I<params>: the array
+sub distinct{ # \@ ( \@ )
     # the idea is to convert the array into a hash, since hash keys must be
     # unique, and then get the keys back
     my %h;
     return grep { !$h{$_}++ } @_
 }
 
-sub get_pass{
+# prompts for a password and returns it.
+sub get_pass{ # $pass (void)
     my $msg = shift;
     $msg = "Type your password : " unless defined $msg;
     ReadMode('noecho'); # don't echo
@@ -238,8 +296,8 @@ sub get_pass{
 
 # returns an array containing the names of the files with the .data_ser extension
 # contained in the specified directory
-# @params : the absolute path to the directory
-sub list_session_dir{
+# I<params>: the absolute path to the directory
+sub list_session_dir{ # \@session_files ( $path )
     my $dirname = shift;
     opendir my($dh), $dirname or die "Couldn't open dir '$dirname': $!";
     @_ = readdir $dh;
@@ -250,16 +308,16 @@ sub list_session_dir{
 }
 
 # prints an error message (in red) to stdout
-# @params : the message to print
-sub print_error{
+# I<params>: the message to print
+sub print_error{ # void ( $message )
     my $msg = shift;
     print "  --- ", color( 'red' ), $msg, color( "reset" ), " ---" , "\n" 
         unless not defined $msg;
 }
 
 # prints an info message to stdout
-# @params : the message to print
-sub print_info{
+# I<params>: the message to print
+sub print_info{ # void ( $message )
     my $msg = shift;
     print "  --- ", color( 'magenta' ), $msg, color( "reset" ), " ---" , "\n" 
         unless not defined $msg;
@@ -280,9 +338,11 @@ use Term::ReadLine;
 
 
 # list the accounts 
-# if no arguments, lists all the accounts names and stores them in last
-# if 1 argument, uses it as a regex and stores in last only the account names that match
-sub list{
+# stores in the last variable all the account names, or only the ones with at least one 
+# field containing the pattern passed as a parameter.
+# 
+# I<params>: the pattern ( optional )
+sub list{ # ( void|\$pattern )
     my ( $package, $args ) = @_;
     my $arg = $args->[0];
     
@@ -302,13 +362,22 @@ sub list{
     }
 }
 
-# search method.
-# if only one arg, stores in last all the account names with at least one
-# field that match the arg.
-# Else, the format is <1 field name> <2 operator> <3 regex[...]>
-#   field names : *, name|account, email, pseudo, notes
-#   operators : is|=, like|~
-sub find{
+# search method. Stores the matches in the @last variable.
+# find <global pattern>
+#       stores all the accounts having at least one field containing the
+#       pattern.
+#
+#    find <property> [is|=] <pattern(s)>
+#       stores all the accounts whose property matches exactly the
+#       pattern(s).
+#
+#    find <property> [like|~] <pattern(s)>
+#       stores all the accounts whose property contains the pattern(s).
+#
+#    find <property> unlike <pattern(s)>
+#       stores all the accounts whose property does not contain the pattern(s).
+
+sub find{ # void ( \@args )
     my ( $package, $args ) = @_;
     
     if( scalar( @$args ) == 1 ){ # just grep in all fields
@@ -326,7 +395,7 @@ sub find{
         
         my $header = $args->[0];
         my $operator = $args->[1];
-        my @keywords = splice( $args, 2 );
+        my @keywords = splice( $args, 2 ); # the remaining args
         my $regex;
         
         # -- checks the operator part        
@@ -389,14 +458,14 @@ sub find{
     }
 }
 
-# returns 1, so tells the main routine to print the content of last
-sub last{
+# simply returns 1, so tells the main routine to print the content of last
+sub last{ 
     return 1;
 }
 
 
 # prints the details of the account
-sub details{
+sub details{ # ( $account )
     my ($package, $args) = @_;
     my $account = Utils::resolve_account( $args->[0] );
     
@@ -411,8 +480,10 @@ sub details{
     }
 }
     
-# copies the password of the account in the clipboard
-sub pass{
+# Copies the password of the account in the clipboard
+#
+# I<params>: the account name
+sub pass{ # ( $account )
     my ( $package, $args ) = @_;
     my $arg = Utils::resolve_account( $args->[0] );
     
@@ -435,8 +506,11 @@ sub pass{
 }
 
 
-# format : copy <name|account|field name> <account>
-sub copy{
+# copy <property> <account name>
+#    Copies some property of an account to the clipboard.
+# 
+# # I<params>: the account name
+sub copy{ # ( $account )
     my ( $package, $args ) = @_;
     my $prop = $args->[0];
     my $account = Utils::resolve_account( $args->[1] );
@@ -466,7 +540,7 @@ sub copy{
     return 0;
 }
 
-# adds a account
+# adds a new account
 sub add{
     my ( $package, $args ) = @_;
     
@@ -502,10 +576,15 @@ sub add{
 }
 
 # edits an account
-sub modify{
+#
+# I<params>: the account name
+sub modify{ # ( $account )
     edit( @_ );
 }
-sub edit{
+# edits an account
+#
+# I<params>: the account name
+sub edit{  # ( $account )
     my ( $package, $args ) = @_;
     my $account = Utils::resolve_account( $args->[0] );
     Utils::print_error("No account provided") and return unless defined $account;
@@ -543,7 +622,8 @@ sub edit{
     return 0;
 }
 
-sub delete{
+# deletes an account
+sub delete{ # ( $account )
     my ( $package, $args ) = @_;
     my $account = Utils::resolve_account( $args->[0] );
     Utils::print_error("No account provided") and return unless defined $account;
@@ -561,7 +641,83 @@ sub delete{
     
 }
 
+# prints the available commands, with details
 sub help{
-    print $OUT " Possible commands : find, copy, list, pass\n";
+
+    my $color = color("bold");
+    my $reset = color("reset");
+    print
+    
+"   $color add $reset
+       adds a a new account. The file is then automatically updated.
+
+   $color copy$reset <property> <account name>
+       Copies some property of an account to the clipboard.
+
+   $color delete$reset <account name> 
+       deletes the matching account
+
+   $color details$reset <account name>
+       displays the details of the account
+
+   $color edit|modify$reset <account name>
+       Edit the properties of the matching account.
+
+   $color find$reset <global pattern>
+       displays all the accounts having at least one field containing the
+       pattern.
+
+   $color find$reset <property> [is|=] <pattern(s)>
+       displays all the accounts whose property matches exactly the
+       pattern(s).
+
+   $color find$reset <property> [like|~] <pattern(s)>
+       displays all the accounts whose property contains the pattern(s).
+
+   $color find$reset <property> unlike <pattern(s)>
+       display all the accounts whose property does not contain the
+       pattern(s).
+
+   $color list$reset
+       list all the account names in the current session.
+
+   $color list$reset <pattern>
+       lists all the account names with at least one property containing the
+       pattern.  Same as \"find <pattern\".
+
+   $color pass$reset <account name>
+       copies the password of the account in the clipboard
+
+   $color help$reset
+       prints this help message
+
+   $color h$reset
+       prints the list of available commands, without details.
+";
+
+    return 0;
+}
+
+# prints the available commands, without details
+sub h{
+    my $color = color("bold");
+    my $reset = color("reset");
+    
+    print 
+"   $color add $reset
+   $color copy$reset <property> <account name>
+   $color delete$reset <account name> 
+   $color details$reset <account name>
+   $color edit|modify$reset <account name>
+   $color find$reset <global pattern>
+   $color find$reset <property> [is|=] <pattern(s)>
+   $color find$reset <property> [like|~] <pattern(s)>
+   $color find$reset <property> unlike <pattern(s)>
+   $color list$reset
+   $color list$reset <pattern>
+   $color pass$reset <account name>
+   $color help$reset
+   $color h$reset
+";
     return 0;
 }
