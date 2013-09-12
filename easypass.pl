@@ -30,9 +30,12 @@ use Text::ParseWords;
 
 use Clipboard;
 use File::Spec::Functions;
-use DataContainer;
 use Getopt::Long;
 use Cwd;
+
+push @INC, ( Cwd::abs_path($0) =~ /(.*\/)[^\/]*/ and $1 );
+require DataContainer;
+
 
 # shared variables between packages
 our $datas;
@@ -61,6 +64,19 @@ GetOptions(
             Utils::print_error( "the directory $session_path does not exist" );
             exit(1);
         }
+    },
+    
+    "h|help" => sub{ 
+        print 
+"
+ This program allows you to easily manipulate easypass session files from the commandline.
+ The following commands are available : 
+        
+";
+        
+        Commands::help(); 
+        print "\n";
+        exit; 
     }
 );
 
@@ -99,7 +115,7 @@ if ('Clipboard::Xclip' eq $Clipboard::driver ) {
 my $new_session = ''; # false
 
 # if the session is not defined, asks it 
-if ( not $session or not grep( /^$session\.data_ser$/, @ls ) ) {
+unless ( $session and $session ~~ [ @ls ] ) {
     
     # lists the existing sessions 
     print "\nExisting sessions:\n\n";
