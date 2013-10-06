@@ -36,17 +36,46 @@ use Cwd;
 push @INC, ( Cwd::abs_path($0) =~ /(.*\/)[^\/]*/ and $1 );
 require DataContainer;
 
+# TODO : better structure
+# variables used for completion
+our @COMMANDS = qw( exit add copy delete details edit modify find list pass help h );
+our @HEADERS_FOR_COMPLETION = qw( name account pseudo email );
 
 # shared variables between packages
-our $datas;
+our $data;
 our ( $term, $OUT );
+
 
 # default arguments
 my $session = "";
-my $session_path = ""; #"/home/lucy/Dropbox/projets/easypass/sessions/";
+my $session_path = ""; #"/home/lucy/Dropbox/Applications/Linder\ Easypass";
 
 # setups the terminal 
 $term = Term::ReadLine->new("easypass");
+
+# TODO : better completion
+$term->Attribs->{completion_function} = sub{
+    my ($text, $line, $start) = @_;
+    
+    if( $line =~ /^\s*$/ ){ # first word
+        @_ = grep{ /^$text/ } @COMMANDS;
+        return @_ if( scalar(@_) );
+    }
+    
+    if( $line =~ /^\s*(copy|find)\s*\w*$/ ){
+        return grep { /^$text/ } @HEADERS_FOR_COMPLETION if( $text );
+        return @HEADERS_FOR_COMPLETION;
+    }
+    
+    if( $line =~ /^(\w+)$/ ){
+        @_ = grep{ /^$1/ } @COMMANDS;
+        return @_ if( scalar(@_) );
+    }
+    
+    
+    return undef;
+};
+
 $OUT = $term->OUT;
 
 # gets the command line arguments
@@ -60,7 +89,7 @@ GetOptions(
     "p|path=s" => sub{
         # checks that the path exists
         $session_path = $_[1]; # @_ = opt_name, opt_value
-        if( not -d $session_path ){
+        if( not -d "$session_path" ){
             Utils::print_error( "the directory $session_path does not exist" );
             exit(1);
         }
@@ -81,7 +110,7 @@ GetOptions(
 );
 
 # prompts for the session path
-if( not $session_path ){
+if( not "$session_path" ){
     while( 1 ){
         $_ = $term->readline( "\nEnter the sessions folder path:" . color("yellow") .  " " );
         print color("reset");
@@ -99,7 +128,7 @@ if( not $session_path ){
 }
 
 # gets the list of sessions
-my @ls = Utils::list_session_dir( $session_path ); # list of the sessions names
+my @ls = Utils::list_session_dir( "$session_path" ); # list of the sessions names
 
 
 # patch for clipboard copy under linux
@@ -130,6 +159,7 @@ unless ( $session and $session ~~ [ @ls ] ) {
     do{
         $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
+        eval{ $term->remove_history( $term->where_history() ) };
         exit if $in_session_nbr eq "exit";
         
     }while Utils::parse_int( $in_session_nbr ) == -1 or $in_session_nbr > $i;
@@ -156,20 +186,16 @@ unless ( $session and $session ~~ [ @ls ] ) {
 $session = File::Spec->catfile( $session_path, $session );
 
 # gets the password from the user
-
-ReadMode('noecho'); # don't echo
-my $password = $term->readline( "\nType your password: " );
-ReadMode(0);        # back to normal
-print "\n";
+my $password = Utils::get_pass();
 #my $password = "essai";
 
 # loads the data
-$datas = DataContainer->new();
-$datas->load_from_file( $session, $password ) unless $new_session;
+$data = DataContainer->new();
+$data->load_from_file( $session, $password ) unless $new_session;
 
 
 # inits the last variable (storing the last results, i.e. a list of account names )
-my @last = $datas->accounts();
+my @last = $data->accounts();
 
 # ******************************************************* loop
 
@@ -195,7 +221,7 @@ while ( 1 ){
         
         if( $_ == 1 ){ # if only one match, prints the details
             print color( "green" ), " 0 : ", color( "reset" );
-            print $datas->to_string( $last[0] );
+            print $data->to_string( $last[0] );
             next;
         }
         
@@ -256,7 +282,7 @@ sub resolve_account{ # $account_name ($arg)
         
     }elsif( defined $arg ){
         # tries to find accounts that match
-        @_ = $datas->match_account_name( $arg );
+        @_ = $data->match_account_name( $arg );
         if( scalar( @_ ) == 1 ){ # if there is a unique match
             return $_[0];
         }
@@ -305,6 +331,7 @@ sub get_pass{ # $pass (void)
     $msg = "Type your password : " unless defined $msg;
     ReadMode('noecho'); # don't echo
     my $password = $term->readline( $msg );
+    eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
     ReadMode( 0 );        # back to normal
     print "\n";
     return $password;
@@ -353,6 +380,7 @@ use Term::ANSIColor;
 use Term::ReadLine;
 
 
+
 # list the accounts 
 # stores in the last variable all the account names, or only the ones with at least one 
 # field containing the pattern passed as a parameter.
@@ -363,11 +391,11 @@ sub list{ # ( void|\$pattern )
     my $arg = $args->[0];
     
    if( not defined $arg ){
-        @last = $datas->accounts();
+        @last = $data->accounts();
         return 1;
 
     }else{
-        @_ = $datas->match_account_name( $arg );
+        @_ = $data->match_account_name( $arg );
         
         if( scalar( @_ ) == 0 ){  # nothing found
             Utils::print_error( "0 match" );
@@ -397,7 +425,7 @@ sub find{ # void ( \@args )
     my ( $package, $args ) = @_;
     
     if( scalar( @$args ) == 1 ){ # just grep in all fields
-        @_ = $datas->match_any( $args->[0] );
+        @_ = $data->match_any( $args->[0] );
         if( scalar( @_ ) > 0 ){
             @last = @_;
             return 1;
@@ -434,23 +462,23 @@ sub find{ # void ( \@args )
         
         # -- checks the keyword part
         if( $header ~~ ['account', 'name'] ){ # search in account names
-            foreach ( $datas->accounts() ){
+            foreach ( $data->accounts() ){
                 push @matches, $_ if /$regex/i; 
             }
             
-        }elsif( $header ~~ [ $datas->headers() ] and not $header eq 'password' ){   # search in one field   
-            foreach my $key ( $datas->accounts() ){
-                push @matches, $key unless $datas->get_prop( $key, $header ) !~ /$regex/i;
+        }elsif( $header ~~ [ $data->headers() ] and not $header eq 'password' ){   # search in one field   
+            foreach my $key ( $data->accounts() ){
+                push @matches, $key unless $data->get_prop( $key, $header ) !~ /$regex/i;
             }
             
         }elsif( $header ~~ ['*', 'any'] ){ # search everywhere
             foreach ( @keywords ){
-                push ( \@matches, $datas->match_any( $_ ) );
+                push ( \@matches, $data->match_any( $_ ) );
             }
             
         }else{ # the header is not correct
             my $str;
-            foreach( $datas->headers() ){ $str .= "$_ " unless $_ eq 'password' ; }
+            foreach( $data->headers() ){ $str .= "$_ " unless $_ eq 'password' ; }
             Utils::print_error( "possible headers : name|account $str");
             return;
         }
@@ -487,7 +515,7 @@ sub details{ # ( $account )
     
     if( defined $account ){
         
-        print $datas->to_string( $account );
+        print $data->to_string( $account );
         return 0;
         
     }else{
@@ -508,7 +536,7 @@ sub pass{ # ( $account )
         return;
     }
             
-    my $pass = $datas->get_prop( $arg, "password" );
+    my $pass = $data->get_prop( $arg, "password" );
             
     if( $pass ){
         Clipboard->copy( $pass );
@@ -531,8 +559,8 @@ sub copy{ # ( $account )
     my $prop = $args->[0];
     my $account = Utils::resolve_account( $args->[1] );
     
-    if( not defined $prop or not $prop ~~ [ ('name', 'account'), $datas->headers() ] ){
-        print " syntax : copy <", join( "|", $datas->headers() ), "> <?account?>\n";
+    if( not defined $prop or not $prop ~~ [ ('name', 'account'), $data->headers() ] ){
+        print " syntax : copy <", join( "|", $data->headers() ), "> <?account?>\n";
         return 0;
     }
     
@@ -543,7 +571,7 @@ sub copy{ # ( $account )
     }
     
     # gets either the name of the account or the specified property
-    $_ = $prop ~~ [ 'name', 'account'] ? $account : $datas->get_prop( $account, $prop );
+    $_ = $prop ~~ [ 'name', 'account'] ? $account : $data->get_prop( $account, $prop );
     
     if( $_ ){
         Clipboard->copy( $_ );
@@ -564,9 +592,9 @@ sub add{
     my $account = $term->readline( "\n  new account name : " );
     $account = Utils::trim( $account );
     print_error( "this account already exist. Use the edit command instead" ) and return 
-        unless not $account ~~ [ $datas->accounts() ];
+        unless not $account ~~ [ $data->accounts() ];
         
-    foreach my $prop ( @{ $datas->{ headers } } ){ # headers unsorted
+    foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             $new_values{ $prop } = Utils::get_pass( "  $prop : " );
         }else{
@@ -579,8 +607,8 @@ sub add{
         my $confirm = $term->readline( "\nsaving ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
             if( $confirm =~ /y/i ){
-                $datas->add( $account, \%new_values );
-                $datas->save_to_file( $session, $password );
+                $data->add( $account, \%new_values );
+                $data->save_to_file( $session, $password );
                 print $OUT "\n";
                 Utils::print_info("New entry saved");
             } 
@@ -608,12 +636,12 @@ sub edit{  # ( $account )
     my %new_values;
     my $new_account = Utils::trim( $term->readline( "\n  account name : ", $account ) );
     
-    foreach my $prop ( @{ $datas->{ headers } } ){ # headers unsorted
+    foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             $_ = Utils::get_pass( "  $prop : " );
             $new_values{ $prop } = $_ if Utils::trim( $_ );
         }else{
-            $new_values{ $prop } = $term->readline( "  $prop : ", $datas->get_prop( $account, $prop ) );
+            $new_values{ $prop } = $term->readline( "  $prop : ", $data->get_prop( $account, $prop ) );
         }
     }
     
@@ -628,9 +656,9 @@ sub edit{  # ( $account )
     
     if( $confirm =~ /y/i ){
         # if the account name was changed, deletes the old key
-        $datas->delete( $account ) unless $account eq $new_account;
-        $datas->add( $new_account, \%new_values );
-        $datas->save_to_file( $session, $password );
+        $data->delete( $account ) unless $account eq $new_account;
+        $data->add( $new_account, \%new_values );
+        $data->save_to_file( $session, $password );
         print "\n";
         Utils::print_info("New entry saved");
     } 
@@ -649,7 +677,7 @@ sub delete{ # ( $account )
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
            if( $confirm =~ /y/i ){
                 print "calling delete ";
-                $datas->delete( $account );
+                $data->delete( $account );
            }
            return 0;
         }

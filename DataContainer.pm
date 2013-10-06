@@ -180,7 +180,7 @@ sub match_any{
 sub load_from_file{
     
     my ( $self, $sessionpath, $pass ) = @_ ;
-    my $decrypt = `openssl enc -d -aes-128-cbc -a -in $sessionpath -k $pass 2>&1`;
+    my $decrypt = `openssl enc -d -aes-128-cbc -a -in "$sessionpath" -k $pass 2>&1`;
     die( "Error, credentials or session path incorrect. Could not decrypt file.\n" ) unless $? == 0;
     
 
