@@ -38,7 +38,7 @@ require DataContainer;
 
 # TODO : better structure
 # variables used for completion
-our @COMMANDS = qw( exit add copy delete details edit modify find list pass help h );
+our @COMMANDS = qw( exit add copy delete details edit modify find list pass help h exit );
 our @HEADERS_FOR_COMPLETION = qw( name account pseudo email );
 
 # shared variables between packages
@@ -52,30 +52,6 @@ my $session_path = ""; #"/home/lucy/Dropbox/Applications/Linder\ Easypass";
 
 # setups the terminal 
 $term = Term::ReadLine->new("easypass");
-
-# TODO : better completion
-$term->Attribs->{completion_function} = sub{
-    my ($text, $line, $start) = @_;
-    
-    if( $line =~ /^\s*$/ ){ # first word
-        @_ = grep{ /^$text/ } @COMMANDS;
-        return @_ if( scalar(@_) );
-    }
-    
-    if( $line =~ /^\s*(copy|find)\s*\w*$/ ){
-        return grep { /^$text/ } @HEADERS_FOR_COMPLETION if( $text );
-        return @HEADERS_FOR_COMPLETION;
-    }
-    
-    if( $line =~ /^(\w+)$/ ){
-        @_ = grep{ /^$1/ } @COMMANDS;
-        return @_ if( scalar(@_) );
-    }
-    
-    
-    return undef;
-};
-
 $OUT = $term->OUT;
 
 # gets the command line arguments
@@ -197,6 +173,31 @@ $data->load_from_file( $session, $password ) unless $new_session;
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $data->accounts();
 
+# ******************************************************* auto-completion
+# TODO : better completion
+# http://search.cpan.org/~hayashi/Term-ReadLine-Gnu-1.20/Gnu.pm#Custom_Completion
+# http://search.cpan.org/~hayashi/Term-ReadLine-Gnu-1.20/Gnu.pm#Term::ReadLine::Gnu_Functions
+$term->Attribs->{completion_function} = sub{
+    my ($text, $line, $start) = @_;
+    
+    if( $line =~ /^\s*$/ ){ # first word
+        @_ = grep{ /^$text/ } @COMMANDS;
+        return @_ if( scalar(@_) );
+    }
+    
+    if( $line =~ /^\s*(copy|find)\s*\w*$/ ){
+        return grep { /^$text/ } @HEADERS_FOR_COMPLETION if( $text );
+        return @HEADERS_FOR_COMPLETION;
+    }
+    
+    if( $line =~ /^(\w+)$/ ){
+        @_ = grep{ /^$1/ } @COMMANDS;
+        return @_ if( scalar(@_) );
+    }
+    
+    
+    return undef;
+};
 # ******************************************************* loop
 
 # the actual loop
