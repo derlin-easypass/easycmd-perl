@@ -18,6 +18,7 @@ package Easypass::CommandLine;
 
 use warnings;
 use strict;
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use utf8;
 
@@ -88,7 +89,7 @@ GetOptions(
 # prompts for the session path
 if( not "$session_path" ){
     while( 1 ){
-        $_ = $term->readline( "\nEnter the sessions folder path:" . color("yellow") .  " " );
+        $_ = $term->readline( "\nEnter the sessions folder path:" . color('yellow') .  " " );
         print color("reset");
         
         exit if Utils::trim( $_ ) eq "exit";
@@ -135,6 +136,7 @@ unless ( $session and $session ~~ [ @ls ] ) {
     do{
         $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
+        $OUT->flush(); # reset color !!
         eval{ $term->remove_history( $term->where_history() ) };
         exit if $in_session_nbr eq "exit";
         
@@ -330,10 +332,13 @@ sub distinct{ # \@ ( \@ )
 sub get_pass{ # $pass (void)
     my $msg = shift;
     $msg = "Type your password : " unless defined $msg;
+
+    print $msg; # don't know why, but it does not work with $term->...
     ReadMode('noecho'); # don't echo
-    my $password = $term->readline( $msg );
+    my $password = ReadLine 0; 
     eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
     ReadMode( 0 );        # back to normal
+
     print "\n";
     return $password;
 }
