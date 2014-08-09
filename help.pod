@@ -1,0 +1,139 @@
+=head1 NAME
+
+I<easypass> - Command Line interface to securely store information and passwords about various accounts.
+
+=head1 DESCRIPTION
+
+Having so many accounts and password that you have trouble remembering them ? Easypasss is made for you. This program stores passwords and account details in files encrypted using openssl encryption.You can split data into multiple session files, each of them encrypted with its own password.
+
+A graphical version of the utility is also available (written in Java), as well as an Android version.
+
+=head1 SYNOPSIS
+
+B<easypass> [-s|--session <session name>] [-p|--path <session path>]
+
+ Command-line arguments:
+
+    -s|--session 
+         the name of the session to open (filename)
+   
+    -p|--path 
+         the path of the sessions directory
+ 
+
+=head1 PROMPT COMMANDS
+
+=head2 add 
+
+add a a new account. The file is then automatically updated.
+
+=head2 copy <property> <account name>
+
+copy some property of an account to the clipboard.
+
+=head2 delete <account name> 
+
+delete the matching account
+
+=head2 details|show <account name>
+
+display the details of the account
+
+=head2 edit|modify <account name>
+
+edit the properties of the matching account.
+
+=head2 find <global pattern>
+
+display sall the accounts having at least one field containing the
+pattern.
+
+=head2 find <property> [is|=] <pattern(s)>
+
+display all the accounts whose property matches exactly the
+pattern(s).
+
+=head2 find <property> [like|~] <pattern(s)>
+
+display all the accounts whose property contains the pattern(s).
+
+=head2 find <property> unlike <pattern(s)>
+
+display all the accounts whose property does not contain the
+pattern(s).
+
+=head2 list
+
+list all the account names in the current session.
+
+=head2 list <pattern>
+
+list all the account names with at least one property containing the
+pattern.  Same as "find <pattern".
+
+=head2 pass <account name>
+
+copy the password of the account in the clipboard
+
+=head2 showpass <account>
+
+display the password (in clear text !!) during 2 seconds in the terminal
+
+=head2 help
+
+print this help message
+
+=head2 h
+
+
+print the list of available commands, without details.
+
+=head2 exit|quit
+
+quit the program
+
+
+=head1 REQUIRES
+
+L<Term::ReadLine> 
+
+L<Term::ANSIColor> 
+
+L<Data::Dumper> 
+
+L<List::Util> 
+
+L<Term::ReadLine> 
+
+L<Term::ReadKey> 
+
+L<Term::ANSIColor> 
+
+L<Cwd> 
+
+L<Getopt::Long> 
+
+L<File::Spec::Functions> 
+
+L<Clipboard> 
+
+L<Text::ParseWords> 
+
+L<JSON> 
+
+L<Data::Dumper> 
+
+L<Term::ANSIColor> 
+
+L<Term::ReadLine> 
+
+L<Term::ReadKey> 
+
+L<utf8> 
+
+
+
+=head1 AUTHOR
+
+Developer: Lucy Linder, <lucy.derlin@gmail.com>
+
