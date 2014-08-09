@@ -12,7 +12,6 @@
 
 $main::VERSION = 1.0;
 
-
 package Easypass::CommandLine;
 
 
@@ -136,7 +135,7 @@ unless ( $session and $session ~~ [ @ls ] ) {
     do{
         $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
-        $OUT->flush(); # reset color !!
+        eval{ $OUT->flush() }; # reset color !! 
         eval{ $term->remove_history( $term->where_history() ) };
         exit if $in_session_nbr eq "exit";
         
@@ -169,8 +168,8 @@ my $password = Utils::get_pass();
 
 # loads the data
 $data = DataContainer->new();
-$data->load_from_file( $session, $password ) unless $new_session;
-
+eval { $data->load_from_file( $session, $password ) unless $new_session };
+print "$@" and exit 1 if $@;
 
 # inits the last variable (storing the last results, i.e. a list of account names )
 my @last = $data->accounts();
@@ -631,6 +630,23 @@ sub add{
 sub modify{ # ( $account )
     edit( @_ );
 }
+
+# show the pass in plain text --> dangerous !!
+sub showpass{
+  my ( $package, $args ) = @_;
+  my $account = Utils::resolve_account( $args->[0] );
+  my $pass = $data->get_prop( $account, "password" );
+
+  if( $pass ){
+      print "$pass\n";
+
+  }else{
+      Utils::print_error( "ambiguous account or no pass defined..." );
+  } 
+
+    return 0;
+}
+
 # edits an account
 sub edit{  # ( $account )
 #
