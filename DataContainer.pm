@@ -124,7 +124,7 @@ Lucy Linder, august 2013
     
 package DataContainer;
 
-use warnings;
+#use warnings;
 use strict;
 
 use utf8;
@@ -180,14 +180,19 @@ sub match_any{
 sub load_from_file{
     
     my ( $self, $sessionpath, $pass ) = @_ ;
-    my $decrypt = `openssl enc -d -aes-128-cbc -a -in "$sessionpath" -k $pass 2>&1`;
-    die( "Error, credentials or session path incorrect. Could not decrypt file.\n" ) unless $? == 0;
+    my $decrypt = `openssl enc -d -aes-128-cbc -a -in '$sessionpath' -k $pass 2>/dev/null`;
+    die "Error, credentials or session path incorrect. Could not decrypt file.\n" 
+        unless $decrypt =~ /^\s*\[/;
     
 
     # these are some nice json options to relax restrictions a bit:
     my $json = new JSON;
     
-    my $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt );
+    my $json_text;
+    eval { $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt ) };
+    
+    die "Unable to decrypt file (json corrupted?)... Check your credentials and try again\n"
+     unless $json_text and $json_text =~ 'ARRAY';
 
     my @keys = @{ $self->{ headers } };
     unshift( @keys, "account" );
