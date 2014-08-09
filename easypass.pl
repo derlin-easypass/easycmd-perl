@@ -38,7 +38,7 @@ require DataContainer;
 
 # TODO : better structure
 # variables used for completion
-our @COMMANDS = qw( exit add copy delete details edit modify find list pass help h exit );
+our @COMMANDS = qw( exit add copy delete details edit modify find list pass help h showpass show );
 our @HEADERS_FOR_COMPLETION = qw( name account pseudo email );
 
 # shared variables between packages
@@ -120,7 +120,7 @@ if ('Clipboard::Xclip' eq $Clipboard::driver ) {
 my $new_session = ''; # false
 
 # if the session is not defined, asks it 
-unless ( $session and $session ~~ [ @ls ] ) {
+unless ( $session and Utils::is_in( $session, [ @ls ] ) ) {
     
     # lists the existing sessions 
     print "\nExisting sessions:\n\n";
@@ -244,12 +244,21 @@ while ( 1 ){
 sub dispatch{ # void ($function_name \@args)
     no strict 'refs';
     my ( $fun, $args ) = @_;
-    exit if $fun eq "exit";
-    
-    Utils::print_error( 'unknown command. Try "h" or "help" for help' ) and return 
-        unless Commands->can( $fun );
+    exit if  Utils::is_in ( $fun, [ "exit", "quit" ] );
+   
+    my $res; # return code
+
+    # the command is known, just execute it
+    if( Commands->can( $fun ) ){
+        $res = Commands->$fun( $args );
+
+    }else{ # unknown command -> assuming find
+        Utils::print_info( 'unknown command; assuming "find" (Try "h" or "help" for help).' ); 
+        $res = Commands->find( [ $fun, @$args ] );
+    }
+
+    return $res;
         
-    Commands->$fun( $args );
 }
 
 # ****************************************************** utils 
@@ -261,6 +270,7 @@ package Utils;
 use Term::ANSIColor;
 use Term::ReadKey;
 use Term::ReadLine;
+use List::Util qw ( first );
 
 
 # tries to resolve the account pointed by the argument, returning the account name :
@@ -371,6 +381,17 @@ sub print_info{ # void ( $message )
         unless not defined $msg;
 }
 
+# checks if $val is in $list
+#
+#   Utils::is_in( $val, [.., ..] ) 
+# is equivalent to:
+#   $val ~~ [ .., .. ]
+#
+# I<params>: the value, the reference to a list
+sub is_in { # bool ($val, \@list )
+    my ($val, $list) = @_;
+    first { $_ eq "$val" } @$list; # use first from List::Util
+}
 
 # ************************************************* Commands
 package Commands;
@@ -448,13 +469,13 @@ sub find{ # void ( \@args )
         my $regex;
         
         # -- checks the operator part        
-        if( $operator ~~ ['=', 'is'] ){
+        if( Utils::is_in( $operator, ['=', 'is'] ) ){
             $regex = "^" . join( '$|^', @keywords ) . '$';
             
-        }elsif( $operator ~~ ['like', '~'] ){ 
+        }elsif( Utils::is_in( $operator, ['like', '~'] ) ){ 
             $regex = join( '|', @keywords );
         
-        }elsif( $operator ~~ ['unlike'] ){
+        }elsif( Utils::is_in( $operator, ['unlike', '!~'] ) ){
             $regex = "^(?:(?!(" . join( '|', @keywords ) . ')).)*$';
             
         }else{ # invalid operator
@@ -466,17 +487,17 @@ sub find{ # void ( \@args )
         my @matches;
         
         # -- checks the keyword part
-        if( $header ~~ ['account', 'name'] ){ # search in account names
+        if( Utils::is_in( $header, ['account', 'name'] ) ){ # search in account names
             foreach ( $data->accounts() ){
                 push @matches, $_ if /$regex/i; 
             }
             
-        }elsif( $header ~~ [ $data->headers() ] and not $header eq 'password' ){   # search in one field   
+        }elsif( Utils::is_in( $header, [ $data->headers() ] ) and not $header eq 'password' ){   # search in one field   
             foreach my $key ( $data->accounts() ){
                 push @matches, $key unless $data->get_prop( $key, $header ) !~ /$regex/i;
             }
             
-        }elsif( $header ~~ ['*', 'any'] ){ # search everywhere
+        }elsif( Utils::is_in( $header, ['*', 'any'] ) ){ # search everywhere
             foreach ( @keywords ){
                 push ( \@matches, $data->match_any( $_ ) );
             }
@@ -512,8 +533,8 @@ sub last{
     return 1;
 }
 
-
 # prints the details of the account
+sub show{ details( @_ ); }
 sub details{ # ( $account )
     my ($package, $args) = @_;
     my $account = Utils::resolve_account( $args->[0] );
@@ -564,7 +585,7 @@ sub copy{ # ( $account )
     my $prop = $args->[0];
     my $account = Utils::resolve_account( $args->[1] );
     
-    if( not defined $prop or not $prop ~~ [ ('name', 'account'), $data->headers() ] ){
+    if( not defined $prop or not Utils::is_in( $prop, [ ('name', 'account'), $data->headers() ] ) ){
         print " syntax : copy <", join( "|", $data->headers() ), "> <?account?>\n";
         return 0;
     }
@@ -576,7 +597,7 @@ sub copy{ # ( $account )
     }
     
     # gets either the name of the account or the specified property
-    $_ = $prop ~~ [ 'name', 'account'] ? $account : $data->get_prop( $account, $prop );
+    $_ = Utils::is_in( $prop, [ 'name', 'account'] ) ? $account : $data->get_prop( $account, $prop );
     
     if( $_ ){
         Clipboard->copy( $_ );
@@ -597,7 +618,7 @@ sub add{
     my $account = $term->readline( "\n  new account name : " );
     $account = Utils::trim( $account );
     print_error( "this account already exist. Use the edit command instead" ) and return 
-        unless not $account ~~ [ $data->accounts() ];
+        unless not Utils::is_in( $account, [ $data->accounts() ] );
         
     foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
@@ -638,7 +659,10 @@ sub showpass{
   my $pass = $data->get_prop( $account, "password" );
 
   if( $pass ){
-      print "$pass\n";
+      chomp( $pass ); # remove trailing newline, if any
+      print "$pass\r"; flush STDOUT; # print pass for x seconds
+      sleep 2;
+      print " " x length($pass); flush STDOUT;#, "\n"; # write spaces over password
 
   }else{
       Utils::print_error( "ambiguous account or no pass defined..." );
@@ -663,7 +687,9 @@ sub edit{  # ( $account )
             $_ = Utils::get_pass( "  $prop : " );
             $new_values{ $prop } = $_ if Utils::trim( $_ );
         }else{
-            $new_values{ $prop } = $term->readline( "  $prop : ", $data->get_prop( $account, $prop ) );
+            $new_values{ $prop } = $term->readline( "  $prop : ", 
+                $data->get_prop( $account, $prop ) );
+            chomp $new_values{ $prop };
         }
     }
     
@@ -715,30 +741,30 @@ sub help{
     print
     
 "   $color add $reset
-       adds a a new account. The file is then automatically updated.
+       add a a new account. The file is then automatically updated.
 
    $color copy$reset <property> <account name>
-       Copies some property of an account to the clipboard.
+       copy some property of an account to the clipboard.
 
    $color delete$reset <account name> 
-       deletes the matching account
+       delete the matching account
 
-   $color details$reset <account name>
-       displays the details of the account
+   $color details|show$reset <account name>
+       display the details of the account
 
    $color edit|modify$reset <account name>
-       Edit the properties of the matching account.
+       edit the properties of the matching account.
 
    $color find$reset <global pattern>
-       displays all the accounts having at least one field containing the
+       display sall the accounts having at least one field containing the
        pattern.
 
    $color find$reset <property> [is|=] <pattern(s)>
-       displays all the accounts whose property matches exactly the
+       display all the accounts whose property matches exactly the
        pattern(s).
 
    $color find$reset <property> [like|~] <pattern(s)>
-       displays all the accounts whose property contains the pattern(s).
+       display all the accounts whose property contains the pattern(s).
 
    $color find$reset <property> unlike <pattern(s)>
        display all the accounts whose property does not contain the
@@ -748,17 +774,23 @@ sub help{
        list all the account names in the current session.
 
    $color list$reset <pattern>
-       lists all the account names with at least one property containing the
+       list all the account names with at least one property containing the
        pattern.  Same as \"find <pattern\".
 
    $color pass$reset <account name>
-       copies the password of the account in the clipboard
+       copy the password of the account in the clipboard
+
+   $color showpass$reset <account>
+          display the password (in clear text !!) during 2 seconds in the terminal
 
    $color help$reset
-       prints this help message
+       print this help message
 
    $color h$reset
-       prints the list of available commands, without details.
+       print the list of available commands, without details.
+
+   $color exit|quit$reset
+          quit the program
 ";
 
     return 0;
