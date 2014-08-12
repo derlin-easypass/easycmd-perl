@@ -166,9 +166,11 @@ sub match_any{
     if( not defined $regex ){ return $self->accounts() };
     
     my @result;
+    my @search_headers = grep { not $_ eq "password" } $self->headers;
+
     while( ( my $account, my $data ) = each %{ $self->{ hash } } ){
         
-        if( $account =~ /$regex/i or grep( /$regex/i, values %{ $data } ) > 0 ){
+        if( $account =~ /$regex/i or grep { $data->{$_} =~ /$regex/i } @search_headers ){
             push @result, $account;
         }
     }

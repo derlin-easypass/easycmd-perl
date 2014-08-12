@@ -494,7 +494,7 @@ sub find{ # void ( \@args )
             
         }elsif( Utils::is_in( $header, [ $data->headers() ] ) and not $header eq 'password' ){   # search in one field   
             foreach my $key ( $data->accounts() ){
-                push @matches, $key unless $data->get_prop( $key, $header ) !~ /$regex/i;
+                push @matches, $key if $data->get_prop( $key, $header ) =~ /$regex/i;
             }
             
         }elsif( Utils::is_in( $header, ['*', 'any'] ) ){ # search everywhere
