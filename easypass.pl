@@ -684,8 +684,13 @@ sub edit{  # ( $account )
     
     foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
-            $_ = Utils::get_pass( "  $prop : " );
-            $new_values{ $prop } = $_ if Utils::trim( $_ );
+            my $newpass = Utils::get_pass( "  $prop : " );
+
+            if( Utils::trim( $newpass ) ){
+                $new_values{ $prop } = $newpass;
+            }else{ # no new pass, just copy the old one
+                $new_values{ $prop } = $data->get_prop( $account, $prop );
+            }
         }else{
             $new_values{ $prop } = $term->readline( "  $prop : ", 
                 $data->get_prop( $account, $prop ) );
