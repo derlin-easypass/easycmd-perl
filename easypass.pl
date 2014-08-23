@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # This program offers a simple way to manipulate easypass session files from the command line.
 # You can search for accounts, copy properties to clipboard, edit|delete|add accounts.
-# Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser extension.
+# Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser_new extension.
 # COMMANDLINE OPTIONS
 # ===================
 # -s|--session 
@@ -59,7 +59,7 @@ GetOptions(
     "s|session=s" => sub{ 
         # adds the extension if not specified
         $session = $_[1]; # @_ = opt_name, opt_value
-        $session .= ".data_ser" unless $session =~ /\.data_ser$/; 
+        $session .= ".data_ser_new" unless $session =~ /\.data_ser_new$/; 
      },
      
     "p|path=s" => sub{
@@ -148,7 +148,7 @@ unless ( $session and Utils::is_in( $session, [ @ls ] ) ) {
             $session = Utils::readline_noh( "new session name: " );
         }while( $session !~ /^[a-z0-9_-]+$/ );
         # adds the proper extension
-        $session .= ".data_ser";
+        $session .= ".data_ser_new";
     }else{ # existing session
         # strips the line break
         chomp( $session = $ls[$in_session_nbr] );
@@ -353,7 +353,7 @@ sub get_pass{ # $pass (void)
     return $password;
 }
 
-# returns an array containing the names of the files with the .data_ser extension
+# returns an array containing the names of the files with the .data_ser_new extension
 # contained in the specified directory
 # I<params>: the absolute path to the directory
 sub list_session_dir{ # \@session_files ( $path )
@@ -361,7 +361,7 @@ sub list_session_dir{ # \@session_files ( $path )
     opendir my($dh), $dirname or die "Couldn't open dir '$dirname': $!";
     @_ = readdir $dh;
     closedir $dh;
-    @_ = grep( /\.data_ser$/, @_);
+    @_ = grep( /\.data_ser_new$/, @_);
     return @_;
 
 }
@@ -384,6 +384,7 @@ sub print_info{ # void ( $message )
  
 sub readline_noh {
     my @args = @_;
+    for (@args){ utf8::decode($_); }
     my $answer = $term->readline( @args );
     chomp $answer;
     eval{ $term->remove_history( $term->where_history() ) }; # remove from history
@@ -626,7 +627,7 @@ sub add{
     my $account = Utils::readline_noh( "\n  new account name : " );
     eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
     $account = Utils::trim( $account );
-    print_error( "this account already exist. Use the edit command instead" ) and return 
+    Utils::print_error( "this account already exist. Use the edit command instead" ) and return 
         unless not Utils::is_in( $account, [ $data->accounts() ] );
         
     foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted

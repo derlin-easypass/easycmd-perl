@@ -185,12 +185,13 @@ sub load_from_file{
     my $decrypt = `openssl enc -d -aes-128-cbc -a -in '$sessionpath' -k $pass 2>/dev/null`;
     die "Error, credentials or session path incorrect. Could not decrypt file.\n" 
         unless $decrypt =~ /^\s*\[/;
-    
 
-    # these are some nice json options to relax restrictions a bit:
-    my $json = new JSON;
+    utf8::encode($decrypt); # get the proper encoding
     
+    my $json = new JSON;
     my $json_text;
+    
+    # these are some nice json options to relax restrictions a bit:
     eval { $json_text = $json->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->decode( $decrypt ) };
     
     die "Unable to decrypt file (json corrupted?)... Check your credentials and try again\n"
@@ -199,16 +200,12 @@ sub load_from_file{
     my @keys = @{ $self->{ headers } };
     unshift( @keys, "account" );
     
-    
-    # constructs the hash
-    foreach my $array ( @{ $json_text } ){
-         my $account = $array->[0] =~ s/^\s+|\s+$//rg; # trims the account name
-         utf8::encode( $account );
-         for (1 .. 4){
-              #$self->{ hash }{ $account }{ $keys[$_] } = $array->[$_];
-              utf8::encode( $self->{ hash }{ $account }{ $keys[$_] } = $array->[$_] );
-         }
+    # convert the array to an hash, binding each account hash to its account name
+    foreach my $hentry ( @{ $json_text } ){
+         my $account = $hentry->{ name };
+         $self->{ hash }{ $account } = $hentry;
      }
+
 }
 
 sub save_to_file{
@@ -216,25 +213,21 @@ sub save_to_file{
     my $json = new JSON;
 
     my @encrypt;
-    
-    # reconstructs the ArrayList<Object[5]> java structure
-    foreach my $account ( keys %{ $self->{hash} } ){
-        my @entry = ( $account );
-        utf8::decode( @entry ); # in scalar context, the array returns its last element
-        foreach my $field ( @{ $self->{headers} } ){
-            utf8::decode( $_ = $self->get_prop( $account, $field ) );
-            push @entry, $_;
-        }
-        push @encrypt, \@entry;
+
+    # reconvert the hash to an array of hashes
+    for my $account ( keys %{ $self->{hash} } ){
+        my $hentry = $self->{hash}->{$account};
+        push @encrypt, $hentry;
     }
     
     # converts to json
-    #my $json_text = $json->new->allow_nonref->utf8->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
-    my $json_text = $json->encode( \@encrypt );
-    utf8::decode( $json_text =~ s/\"/\\\"/g ); # decodes in utf8 and escapes the double quotes since we use echo "..." for openssl command
+    my $json_text = $json->allow_nonref->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
+    
+    utf8::decode( $json_text ); # don't forget to reencode properly (we do the opposite of load)
+    print "\nJSON:\n$json_text\n";
     
     # encrypts the json
-    my $encrypt = `echo "$json_text" | openssl enc -aes-128-cbc -a -k $pass 2>&1`;
+    my $encrypt = `echo '$json_text' | openssl enc -aes-128-cbc -a -k $pass 2>&1`;
     return unless $? == 0;
     
     # prints the encrypted result to file
@@ -286,6 +279,7 @@ sub delete{
 sub add{
     my ( $self, $account, $values ) = @_;
     defined $account or return;
+    $values->{ name } = $account;
     $self->{ hash }{ $account } = $values;    
 }
 
