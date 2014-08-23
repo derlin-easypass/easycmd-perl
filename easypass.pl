@@ -133,7 +133,7 @@ unless ( $session and Utils::is_in( $session, [ @ls ] ) ) {
     # asks the user for the session number to open
     my $in_session_nbr;
     do{
-        $in_session_nbr = $term->readline( "\nsession [0-$i]: " . color( "yellow" ) );
+        $in_session_nbr = Utils::readline_noh( "\nsession [0-$i]: " . color( "yellow" ) );
         print $OUT color( "reset" );
         eval{ $OUT->flush() }; # reset color !! 
         eval{ $term->remove_history( $term->where_history() ) };
@@ -145,7 +145,7 @@ unless ( $session and Utils::is_in( $session, [ @ls ] ) ) {
         $new_session = 1;
         # gets the new session name
         do{
-            $session = $term->readline( "new session name: " );
+            $session = Utils::readline_noh( "new session name: " );
         }while( $session !~ /^[a-z0-9_-]+$/ );
         # adds the proper extension
         $session .= ".data_ser";
@@ -345,6 +345,7 @@ sub get_pass{ # $pass (void)
     print $msg; # don't know why, but it does not work with $term->...
     ReadMode('noecho'); # don't echo
     my $password = ReadLine 0; 
+    chomp $password;
     eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
     ReadMode( 0 );        # back to normal
 
@@ -380,7 +381,14 @@ sub print_info{ # void ( $message )
     print "  --- ", color( 'magenta' ), $msg, color( "reset" ), " ---" , "\n" 
         unless not defined $msg;
 }
-
+ 
+sub readline_noh {
+    my @args = @_;
+    my $answer = $term->readline( @args );
+    chomp $answer;
+    eval{ $term->remove_history( $term->where_history() ) }; # remove from history
+    return $answer;
+}
 # checks if $val is in $list
 #
 #   Utils::is_in( $val, [.., ..] ) 
@@ -615,7 +623,8 @@ sub add{
     my ( $package, $args ) = @_;
     
     my %new_values;
-    my $account = $term->readline( "\n  new account name : " );
+    my $account = Utils::readline_noh( "\n  new account name : " );
+    eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
     $account = Utils::trim( $account );
     print_error( "this account already exist. Use the edit command instead" ) and return 
         unless not Utils::is_in( $account, [ $data->accounts() ] );
@@ -624,13 +633,14 @@ sub add{
         if( $prop eq 'password' ){
             $new_values{ $prop } = Utils::get_pass( "  $prop : " );
         }else{
-            $new_values{ $prop } = $term->readline( "  $prop : " );
+            $new_values{ $prop } = Utils::readline_noh( "  $prop : " );
+            eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
         }
     }
     
 
     while( 1 ){
-        my $confirm = $term->readline( "\nsaving ? [y/n] " );
+        my $confirm = Utils::readline_noh( "\nsaving ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
             if( $confirm =~ /y/i ){
                 $data->add( $account, \%new_values );
@@ -680,14 +690,14 @@ sub edit{  # ( $account )
     Utils::print_error("No account provided") and return unless defined $account;
     
     my %new_values;
-    my $new_account = Utils::trim( $term->readline( "\n  account name : ", $account ) );
+    my $new_account = Utils::trim( Utils::readline_noh( "\n  account name : ", $account ) );
     
     foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             $_ = Utils::get_pass( "  $prop : " );
             $new_values{ $prop } = $_ if Utils::trim( $_ );
         }else{
-            $new_values{ $prop } = $term->readline( "  $prop : ", 
+            $new_values{ $prop } = Utils::readline_noh( "  $prop : ", 
                 $data->get_prop( $account, $prop ) );
             chomp $new_values{ $prop };
         }
@@ -696,7 +706,7 @@ sub edit{  # ( $account )
     my $confirm;
     
     while( 1 ){
-        $confirm = $term->readline( "\n  Saving ? [y/n] " );
+        $confirm = Utils::readline_noh( "\n  Saving ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
            last;
         }
@@ -721,7 +731,7 @@ sub delete{ # ( $account )
     Utils::print_error("No account provided") and return unless defined $account;
     
     while( 1 ){
-        my $confirm = $term->readline( "\n  Deleting \"$account\" ? [y/n] " );
+        my $confirm = Utils::readline_noh( "\n  Deleting \"$account\" ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
            if( $confirm =~ /y/i ){
                 print "calling delete ";
