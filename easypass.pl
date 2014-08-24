@@ -271,7 +271,7 @@ use Term::ANSIColor;
 use Term::ReadKey;
 use Term::ReadLine;
 use List::Util qw ( first );
-
+use POSIX qw(strftime);
 
 # tries to resolve the account pointed by the argument, returning the account name :
 # 1. if the arg is a number, finds if it denotes an index of the last array var.
@@ -390,6 +390,8 @@ sub readline_noh {
     eval{ $term->remove_history( $term->where_history() ) }; # remove from history
     return $answer;
 }
+
+
 # checks if $val is in $list
 #
 #   Utils::is_in( $val, [.., ..] ) 
@@ -400,6 +402,11 @@ sub readline_noh {
 sub is_in { # bool ($val, \@list )
     my ($val, $list) = @_;
     first { $_ eq "$val" } @$list; # use first from List::Util
+}
+
+sub get_date{
+    my $datestring = strftime "%F %H:%M", gmtime;
+    return $datestring;
 }
 
 # ************************************************* Commands
@@ -619,49 +626,6 @@ sub copy{ # ( $account )
     return 0;
 }
 
-# adds a new account
-sub add{
-    my ( $package, $args ) = @_;
-    
-    my %new_values;
-    my $account = Utils::readline_noh( "\n  new account name : " );
-    eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
-    $account = Utils::trim( $account );
-    Utils::print_error( "this account already exist. Use the edit command instead" ) and return 
-        unless not Utils::is_in( $account, [ $data->accounts() ] );
-        
-    foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
-        if( $prop eq 'password' ){
-            $new_values{ $prop } = Utils::get_pass( "  $prop : " );
-        }else{
-            $new_values{ $prop } = Utils::readline_noh( "  $prop : " );
-            eval{ $term->remove_history( $term->where_history() ) }; # remove pass from history
-        }
-    }
-    
-
-    while( 1 ){
-        my $confirm = Utils::readline_noh( "\nsaving ? [y/n] " );
-        if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
-            if( $confirm =~ /y/i ){
-                $data->add( $account, \%new_values );
-                $data->save_to_file( $session, $password );
-                print $OUT "\n";
-                Utils::print_info("New entry saved");
-            } 
-            
-           return 0;
-        }
-    }
-
-}
-
-# edits an account
-#
-# I<params>: the account name
-sub modify{ # ( $account )
-    edit( @_ );
-}
 
 # show the pass in plain text --> dangerous !!
 sub showpass{
@@ -682,29 +646,67 @@ sub showpass{
     return 0;
 }
 
+
 # edits an account
-sub edit{  # ( $account )
 #
 # I<params>: the account name
+sub modify{ # ( $account )
+    edit( @_ );
+}
+# edits an account
+sub edit{  # ( $account )
+# I<params>: the account name
     my ( $package, $args ) = @_;
+    
     my $account = Utils::resolve_account( $args->[0] );
     Utils::print_error("No account provided") and return unless defined $account;
     
+    $_ = __add_edit( $account, $data->get_hentry( $account ) );
+    print "Account modified successfully\n" if($_);
+    return 0;
+}
+
+# adds a new account
+sub add{
+    my ( $package, $args ) = @_;
+    
     my %new_values;
+    # create empty entry
+    foreach ( @{ $data->{ headers } } ){ $new_values{$_} = ""; }
+    # add the correct creation date
+    $new_values{ 'creation date' } = Utils::get_date();
+    
+    # fill it in with the user data
+    $_ = __add_edit( "", \%new_values );
+    print "Account added successfully\n" if($_);
+    
+    return 0;
+
+}
+
+# ----------------------
+# add or edit an account
+#I<params>: the account name (empty if new), the hash containing the old values.
+#           If this is a new account, the hash should anyway contain all the regular keys to
+#           avoid errors.
+# Notes: the "modification date" will be updated, not the "creation date".
+sub __add_edit{
+    my ($account, $old_values, ) = @_;
+    my %new_values = %$old_values;
     my $new_account = Utils::trim( Utils::readline_noh( "\n  account name : ", $account ) );
+    
+    Utils::print_error( "empty account names not allowed" ) and return if not $new_account; 
+    Utils::print_error( "this account already exist. Use the edit command instead" ) and return 
+        if (not $account eq $new_account) and Utils::is_in( $new_account, [ $data->accounts() ] );
     
     foreach my $prop ( @{ $data->{ headers } } ){ # headers unsorted
         if( $prop eq 'password' ){
             my $newpass = Utils::get_pass( "  $prop : " );
-
-            if( Utils::trim( $newpass ) ){
-                $new_values{ $prop } = $newpass;
-            }else{ # no new pass, just copy the old one
-                $new_values{ $prop } = $data->get_prop( $account, $prop );
-            }
+            # update password only if a new one has been provided
+            $new_values{ $prop } = $newpass if( Utils::trim( $newpass ) );
+            
         }else{
-            $new_values{ $prop } = Utils::readline_noh( "  $prop : ", 
-                $data->get_prop( $account, $prop ) );
+            $new_values{ $prop } = Utils::readline_noh( "  $prop : ", $new_values{ $prop } );
             chomp $new_values{ $prop };
         }
     }
@@ -719,16 +721,22 @@ sub edit{  # ( $account )
     }
     
     if( $confirm =~ /y/i ){
-        # if the account name was changed, deletes the old key
+        # set the metadata
+        $new_values{ 'modification date' } = Utils::get_date();
+        
+        # if the account name was changed, delete the old key
         $data->delete( $account ) unless $account eq $new_account;
         $data->add( $new_account, \%new_values );
+        # save the change
         $data->save_to_file( $session, $password );
         print "\n";
-        Utils::print_info("New entry saved");
+        return 1;
     } 
     
     return 0;
 }
+
+# ----------------------
 
 # deletes an account
 sub delete{ # ( $account )
@@ -740,7 +748,6 @@ sub delete{ # ( $account )
         my $confirm = Utils::readline_noh( "\n  Deleting \"$account\" ? [y/n] " );
         if( $confirm =~ /^[\s]*(y|yes|no|n)[\s]*$/i ){
            if( $confirm =~ /y/i ){
-                print "calling delete ";
                 $data->delete( $account );
            }
            return 0;
