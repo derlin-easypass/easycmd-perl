@@ -133,7 +133,6 @@ use Term::ANSIColor;
 use Data::Dumper;
 use JSON -support_by_pp;  
 
-
 sub new{
     my $class = shift;
     my $self = {
@@ -243,12 +242,28 @@ sub to_string{
     
     my ( $self, $account ) = @_;
     return unless defined $account; 
-    my $str = color( "bright_blue" ) . "*** $account ***" . color( "reset" ) . "\n";
-    #print "-" x ( 2 + length($account) ), "\n", color( "reset" );
     
-    while ( ( my $key, my $val ) = each %{ $self->{ hash }{ $account } } ){
-        $str .= "   $key" . " " x ( 10 - length($key) ) . "=>  $val \n" unless ($key eq "password");
+    my $hentry = $self->{ hash }{ $account };    
+    my $str = color( "bright_blue" ) . "*** $account ***" . color( "reset" ) . "\n\n";
+    
+    for my $key ( @{ $self->{headers} } ){
+        my $val = $hentry->{ $key };
+        
+        if( $key eq 'password'){
+            $val = "***" if $val;
+            $str .=  "   $key" . " " x ( 10 - length($key) ) . "=>  $val\n";          
+        
+        }else{
+            $str .=  "   $key" . " " x ( 10 - length($key) ) . "=>  $val\n";
+        }
     }
+    
+    $str .= "\nCreated [" . $hentry->{'creation date'} . "], ";
+    $str .= "Last modified [" . $hentry->{'modification date'} . "]\n\n"; 
+    
+#     while ( ( my $key, my $val ) = each %{ $self->{ hash }{ $account } } ){
+#         $str .= "   $key" . " " x ( 10 - length($key) ) . "=>  $val \n" unless ($key eq "password");
+#     }
     
     return $str;
 }
@@ -262,12 +277,16 @@ sub headers{
     return ( sort @{ shift->{ headers } } );
 }
 
+sub get_hentry{
+    my ( $self, $account ) = @_;
+    return $self->{hash}{ $account };
+}
+
 sub get_prop{
     my ( $self, $account, $prop ) = @_;
     defined $account or return;
     return $self->{ hash }{ $account }{ $prop };
 }
-
 
 sub delete{
     my ( $self, $account ) = @_;
@@ -275,12 +294,13 @@ sub delete{
     delete $self->{ hash }{ $account };    
 }
 
-
 sub add{
     my ( $self, $account, $values ) = @_;
     defined $account or return;
-    $values->{ name } = $account;
+    $values->{ 'name' } = $account;
     $self->{ hash }{ $account } = $values;    
 }
+
+
 
 1;
