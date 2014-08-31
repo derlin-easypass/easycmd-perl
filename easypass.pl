@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # This program offers a simple way to manipulate easypass session files from the command line.
 # You can search for accounts, copy properties to clipboard, edit|delete|add accounts.
-# Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser_new extension.
+# Everything is saved following the easypass format : json encoded and openssl encrypted, with the .data_ser extension.
 # COMMANDLINE OPTIONS
 # ===================
 # -s|--session 
@@ -59,7 +59,7 @@ GetOptions(
     "s|session=s" => sub{ 
         # adds the extension if not specified
         $session = $_[1]; # @_ = opt_name, opt_value
-        $session .= ".data_ser_new" unless $session =~ /\.data_ser_new$/; 
+        $session .= ".data_ser" unless $session =~ /\.data_ser$/; 
      },
      
     "p|path=s" => sub{
@@ -148,7 +148,7 @@ unless ( $session and Utils::is_in( $session, [ @ls ] ) ) {
             $session = Utils::readline_noh( "new session name: " );
         }while( $session !~ /^[a-z0-9_-]+$/ );
         # adds the proper extension
-        $session .= ".data_ser_new";
+        $session .= ".data_ser";
     }else{ # existing session
         # strips the line break
         chomp( $session = $ls[$in_session_nbr] );
@@ -353,7 +353,7 @@ sub get_pass{ # $pass (void)
     return $password;
 }
 
-# returns an array containing the names of the files with the .data_ser_new extension
+# returns an array containing the names of the files with the .data_ser extension
 # contained in the specified directory
 # I<params>: the absolute path to the directory
 sub list_session_dir{ # \@session_files ( $path )
@@ -361,7 +361,7 @@ sub list_session_dir{ # \@session_files ( $path )
     opendir my($dh), $dirname or die "Couldn't open dir '$dirname': $!";
     @_ = readdir $dh;
     closedir $dh;
-    @_ = grep( /\.data_ser_new$/, @_);
+    @_ = grep( /\.data_ser$/, @_);
     return @_;
 
 }
