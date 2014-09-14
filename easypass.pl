@@ -14,7 +14,6 @@ $main::VERSION = 1.0;
 
 package Easypass::CommandLine;
 
-
 use warnings;
 use strict;
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
@@ -23,6 +22,7 @@ use utf8;
 
 use Term::ReadKey;
 use Term::ReadLine;
+use POSIX;          #  for sigaction (sigint with readline)
 use Term::ANSIColor;
 use Data::Dumper;
 use JSON -support_by_pp;  
@@ -45,14 +45,15 @@ our @HEADERS_FOR_COMPLETION = qw( name account pseudo email );
 our $data;
 our ( $term, $OUT );
 
-
 # default arguments
 my $session = "";
 my $session_path = ""; #"/home/lucy/Dropbox/Applications/Linder\ Easypass";
 
-# setups the terminal 
-$term = Term::ReadLine->new("easypass");
+my $prompt_line = "easypass> ";  # what to display for the prompt
+$term = new Term::ReadLine "easypass";
 $OUT = $term->OUT;
+$| = 1; # readline disable stdout autoflush --> re-enable it
+
 
 # gets the command line arguments
 GetOptions( 
@@ -200,15 +201,35 @@ $term->Attribs->{completion_function} = sub{
     return undef;
 };
 # ******************************************************* loop
+  
+# for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
+# setup the terminal - ctrl+c behavior
 
+sigaction SIGINT, new POSIX::SigAction sub { 
+# uncomment this part to clear the entered (but not submitted) text 
+# see http://cpansearch.perl.org/src/HAYASHI/Term-ReadLine-Gnu-1.20/eg/perlsh, in sub toplevel
+    # $term->modifying;
+    # $term->delete_text;
+    # $term->Attribs->{point} = $term->Attribs->{end} = 0;
+    # $term->redisplay;
+
+# here, we print a message and then redisplay an empty prompt on ctrl+c
+    print $OUT color("reset"), "\n   Use 'exit' to quit...", color("yellow"), "\n\n";
+    print $OUT $prompt_line;
+    $term->Attribs->{line_buffer} = ""; # delete the (not yet submitted)input
+    $term->rl_on_new_line_with_prompt(); # see http://www.delorie.com/gnu/docs/readline/rlman_35.html
+
+} or die "Error setting SIGINT handler: $!\n";
+
+
+print $OUT "\n\n== Welcome to easypass ==\nUse 'help' to display the available commands, 'exit' to quit the prompt.\n\n";
 # the actual loop
 while ( 1 ){
 
-    # for it to work, be sure to have libterm-readline-gnu-perl package installed + export "PERL_RL= o=0"
     print $OUT color( "yellow" ), "\n";
-    my @in = shellwords( $term->readline( "-> " ) ); 
+    my @in = shellwords( $term->readline( $prompt_line ) ); 
     print $OUT color("reset"), "\n";
-    
+    print Dumper(@in);
     # parses the args from the commandline
     my( $fun, @args ) = @in;
 
@@ -253,7 +274,7 @@ sub dispatch{ # void ($function_name \@args)
         $res = Commands->$fun( $args );
 
     }else{ # unknown command -> assuming find
-        Utils::print_info( 'unknown command; assuming "find" (Try "h" or "help" for help).' ); 
+        Utils::print_info( 'unknown command "' . $fun . '"; assuming "find" (Try "h" or "help" for help).' ); 
         $res = Commands->find( [ $fun, @$args ] );
     }
 
