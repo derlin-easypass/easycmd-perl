@@ -229,7 +229,7 @@ while ( 1 ){
     print $OUT color( "yellow" ), "\n";
     my @in = shellwords( $term->readline( $prompt_line ) ); 
     print $OUT color("reset"), "\n";
-    print Dumper(@in);
+
     # parses the args from the commandline
     my( $fun, @args ) = @in;
 
@@ -699,10 +699,9 @@ sub add{
     
     # fill it in with the user data
     $_ = __add_edit( "", \%new_values );
-    print "Account added successfully\n" if($_);
-    
-    return 0;
+    print "Account added successfully\n" if $_;
 
+    return 0; # the last variable was not changed, no need to print it again
 }
 
 # ----------------------
@@ -749,8 +748,13 @@ sub __add_edit{
         $data->delete( $account ) unless $account eq $new_account;
         $data->add( $new_account, \%new_values );
         # save the change
-        $data->save_to_file( $session, $password );
-        print "\n";
+        $_ = $data->save_to_file( $session, $password );
+
+        if(not $_){
+            Utils::print_error("Oops, an error occurred... Data not saved!!");
+            return 0;
+        }
+        
         return 1;
     } 
     
