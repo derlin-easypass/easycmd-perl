@@ -223,11 +223,13 @@ sub save_to_file{
     my $json_text = $json->allow_nonref->relaxed->escape_slash->loose->allow_singlequote->allow_barekey->encode( \@encrypt );
     
     utf8::decode( $json_text ); # don't forget to reencode properly (we do the opposite of load)
-    print "\nJSON:\n$json_text\n";
     
     # encrypts the json
-    my $encrypt = `echo '$json_text' | openssl enc -aes-128-cbc -a -k $pass 2>&1`;
-    return unless $? == 0;
+    my $encrypt = `openssl enc -aes-128-cbc -a -k $pass 2>&1 <<EOF__EOF 
+$json_text
+EOF__EOF`;
+
+    return 0 unless $? == 0; # 0 is like false
     
     # prints the encrypted result to file
     open my $FILE, ">$sessionpath";
